@@ -210,6 +210,10 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     ofstream fout_LiDAR_meas, fout_IMU_meas;
     double data_accum_length;
+    double lidar_frame_count;
+    bool first_deDistortLidar;
+    CalibState IMU_state;
+    CalibState Lidar_state;
 
     Dynamic_init();
 
@@ -217,75 +221,52 @@ public:
 
 
     void plot_result();
-
     void push_ALL_IMU_CalibState(const sensor_msgs::Imu::ConstPtr &msg, const double &mean_acc_norm);
-
     void push_Lidar_CalibState(const M3D &rot, const V3D &omg, const V3D &linear_vel, const double &timestamp);
-
-
-
-
     void set_IMU_state(const deque<CalibState> &IMU_states);
-
     void set_Lidar_state(const deque<CalibState> &Lidar_states);
-
-    void normalize_acc(deque<CalibState> &signal_in);
-
-    void solve_Rotation_only();
-
-    void solve_Rot_bias_gyro(double &timediff_imu_wrt_lidar);
-
-    void solve_trans_biasacc_grav();
+    // void normalize_acc(deque<CalibState> &signal_in);
+    // void solve_Rotation_only();
+    // void solve_Rot_bias_gyro(double &timediff_imu_wrt_lidar);
+    // void solve_trans_biasacc_grav();
 
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
-                           const double &move_start_time);
-
+                            const double &move_start_time);
+    bool Data_processing(MeasureGroup& meas);
     void clear();
-
-
     void print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0);
+
 
     inline V3D get_Grav_L0() {
         return Grav_L0;
     }
-
-
     inline V3D get_gyro_bias() {
         return gyro_bias;
     }
-
     inline V3D get_acc_bias() {
         return acc_bias;
     }
-
-    inline V3D V_0() {
+    inline V3D get_V_0() {
     return V_0;
     }
-
     inline void IMU_buffer_clear() {
         IMU_state_group_ALL.clear();
     }
-
     deque<CalibState> get_IMU_state() {
         return IMU_state_group;
     }
-
     deque<CalibState> get_Lidar_state() {
         return Lidar_state_group;
     }
-
     void IMU_state_group_ALL_pop_front(){
         IMU_state_group_ALL.pop_front();
     }
-
     void Lidar_state_group_pop_front(){
         Lidar_state_group.pop_front();
     }
-
     int IMU_state_group_ALL_size(){
         return IMU_state_group_ALL.size();
     }
-
     int Lidar_state_group_size(){
         return Lidar_state_group.size();
     }
@@ -294,9 +275,8 @@ private:
     deque<CalibState> IMU_state_group;
     deque<CalibState> Lidar_state_group;
     deque<CalibState> IMU_state_group_ALL;
-
-
-    /// Parameters needed to be calibrated
+    vector<MeasureGroup> Initialized_data;
+    /// Parameters needed to be calibrateds
     V3D Grav_L0;                  // Gravity vector in the initial Lidar frame L_0
     V3D gyro_bias;                // gyro bias
     V3D acc_bias;                 // acc bias

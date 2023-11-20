@@ -1,16 +1,20 @@
 #include "Dynamic_init.h"
 
-Dynamic_init::Dynamic_init() {
+Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 300;
+    data_accum_length = 4;
+    lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
+    Grav_L0 = Zero3d;
+    V_0 = Zero3d;
+    first_deDistortLidar = false;
 }
 
 Dynamic_init::~Dynamic_init() = default;
 
-void Dynamic_init::set_IMU_state(const deque<CalibState> &IMU_states) {
+void Dynamic_init::set_IMU_state(const deque<CalibState> &IMU_states){
     IMU_state_group.assign(IMU_states.begin(), IMU_states.end() - 1);
 }
 
@@ -38,6 +42,54 @@ void Dynamic_init::push_Lidar_CalibState(const M3D &rot, const V3D &omg, const V
     Lidar_state_group.push_back(Lidarstate);
 }
 
+void Dynamic_init::clear() {
+    // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
+    cout << "\x1B[2J\x1B[H";
+}
+
+bool Dynamic_init::Data_processing(MeasureGroup& meas)
+{
+    Initialized_data.push_back(meas);
+    if( lidar_frame_count == 0 )
+    {
+        lidar_frame_count++;
+        return false;
+    }
+    // Step 1: De-distort lidar data
+    // deDistortLidar(meas);
+    
+    // Step 2: Use ICP for trajectory estimation and save the odomentry.
+    // estimateTrajectoryICP(meas.lidar);
+    
+    // Step 3: Perform IMU pre-integration and estimate the odomentry.
+    // preintegrateIMU(meas.imu);
+    
+    // Step 4: Check the count of received lidar data frames.
+    lidar_frame_count++;
+    if (lidar_frame_count <= data_accum_length)
+    {
+        // If less than or equal to 4 frames, exit the function.
+        return false;
+    }
+    return true; 
+}
+
+
+
+void Dynamic_init::Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
+                                const double &move_start_time) {
+
+    TimeConsuming time("Batch optimization");
+
+
+ 
+    printf(BOLDBLUE"============================================================ \n\n" RESET);
+    // print_initialization_result(time_L_I, Rot_Lidar_wrt_IMU, Trans_Lidar_wrt_IMU, gyro_bias, acc_bias, Grav_L0);
+    printf(BOLDBLUE"============================================================ \n\n" RESET);
+    printf(BOLDCYAN "[Initialization] Lidar IMU initialization done.\n");
+    printf("" RESET);
+}
+/*
 void Dynamic_init::solve_Rotation_only() {
     double R_LI_quat[4];
     R_LI_quat[0] = 1;
@@ -54,9 +106,9 @@ void Dynamic_init::solve_Rotation_only() {
         M3D Lidar_angvel_skew;
         Lidar_angvel_skew << SKEW_SYM_MATRX(Lidar_state_group[i].ang_vel);
         problem_rot.AddResidualBlock(Angular_Vel_Cost_only_Rot::Create(IMU_state_group[i].ang_vel,
-                                                                       Lidar_state_group[i].ang_vel),
-                                     nullptr,
-                                     R_LI_quat);
+                                                                    Lidar_state_group[i].ang_vel),
+                                                                    nullptr,
+                                                                    R_LI_quat);
 
     }
     ceres::Solver::Options options_quat;
@@ -90,13 +142,13 @@ void Dynamic_init::solve_Rot_bias_gyro(double &timediff_imu_wrt_lidar) {
     for (int i = 0; i < IMU_state_group.size(); i++) {
         double deltaT = Lidar_state_group[i].timeStamp - IMU_state_group[i].timeStamp;
         problem_ang_vel.AddResidualBlock(Angular_Vel_Cost::Create(IMU_state_group[i].ang_vel,
-                                                                  IMU_state_group[i].ang_acc,
-                                                                  Lidar_state_group[i].ang_vel,
-                                                                  deltaT),
-                                         nullptr,
-                                         R_LI_quat,
-                                         bias_g,
-                                         &time_lag2);
+                                                                IMU_state_group[i].ang_acc,
+                                                                Lidar_state_group[i].ang_vel,
+                                                                deltaT),
+                                                                nullptr,
+                                                                R_LI_quat,
+                                                                bias_g,
+                                                                &time_lag2);
     }
 
 
@@ -163,12 +215,12 @@ void Dynamic_init::solve_trans_biasacc_grav() {
 
     for (int i = 0; i < IMU_state_group.size(); i++) {
         problem_acc.AddResidualBlock(Linear_acc_Cost::Create(Lidar_state_group[i],
-                                                             Rot_Lidar_wrt_IMU,
-                                                             IMU_state_group[i].linear_acc),
-                                     nullptr,
-                                     R_GL0_quat,
-                                     bias_aL,
-                                     Trans_IL);
+                                                    Rot_Lidar_wrt_IMU,
+                                                    IMU_state_group[i].linear_acc),
+                                                    nullptr,
+                                                    R_GL0_quat,
+                                                    bias_aL,
+                                                    Trans_IL);
 
         Jacobian.block<3, 3>(3 * i, 0) = -Lidar_state_group[i].rot_end;
         Jacobian.block<3, 3>(3 * i, 3) << SKEW_SYM_MATRX(STD_GRAV);
@@ -206,7 +258,7 @@ void Dynamic_init::solve_trans_biasacc_grav() {
         V3D acc_L = Lidar_state_group[i].linear_acc +
                     Lidar_state_group[i].rot_end * Jaco_Trans.block<3, 3>(3 * i, 0) * Trans_IL_vec - Grav_L0;
         fout_acc_cost << setprecision(10) << acc_I.transpose() << " " << acc_L.transpose() << " "
-                      << IMU_state_group[i].timeStamp << " " << Lidar_state_group[i].timeStamp << endl;
+                    << IMU_state_group[i].timeStamp << " " << Lidar_state_group[i].timeStamp << endl;
     }
 
     M3D Hessian_Trans = Jaco_Trans.transpose() * Jaco_Trans;
@@ -227,33 +279,7 @@ void Dynamic_init::normalize_acc(deque<CalibState> &signal_in) {
         signal_in[i].linear_acc = signal_in[i].linear_acc / mean_acc.norm() * G_m_s2;
     }
 }
-
-void Dynamic_init::clear() {
-    // CSI[2J clears screen, CSI[H moves the cursor to top-left corner
-    cout << "\x1B[2J\x1B[H";
-}
-
-void Dynamic_init::Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
-                                const double &move_start_time) {
-
-    TimeConsuming time("Batch optimization");
-
-    //Point cloud velocity estimation(four)
-
-    //motion compensation
-
-    //ICP calibration
-
-    //IMU pre-integrated alignment
-
- 
-    printf(BOLDBLUE"============================================================ \n\n" RESET);
-    // print_initialization_result(time_L_I, Rot_Lidar_wrt_IMU, Trans_Lidar_wrt_IMU, gyro_bias, acc_bias, Grav_L0);
-    printf(BOLDBLUE"============================================================ \n\n" RESET);
-    printf(BOLDCYAN "[Initialization] Lidar IMU initialization done.\n");
-    printf("" RESET);
-}
-
+*/
 void Dynamic_init::print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0){
     cout.setf(ios::fixed);
     printf(BOLDCYAN "[Init Result] " RESET);

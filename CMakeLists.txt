@@ -85,6 +85,10 @@ catkin_package(
   INCLUDE_DIRS
 )
 
-add_executable(dynamic_init src/laserMapping.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
+add_executable(dynamic_init 
+            src/laserMapping.cpp 
+            include/ikd-Tree/ikd_Tree.cpp 
+            include/Dynamic_init/Dynamic_init.cpp
+            src/preprocess.cpp)
 target_link_libraries(dynamic_init ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES})
 target_include_directories(dynamic_init PRIVATE ${PYTHON_INCLUDE_DIRS})
