@@ -185,6 +185,40 @@ auto set_pose6d(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> 
     return move(rot_kp);
 }
 
+template<typename T>
+auto imu_accumulative_backward(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> &g, \
+                Pose6D &icp_state)
+{
+    Pose6D rot_kp;
+    rot_kp.offset_time = t;
+    for (int i = 0; i < 3; i++)
+    {
+        rot_kp.acc[i] = a(i);
+        rot_kp.gyr[i] = g(i);
+        rot_kp.vel[i] = a*t;
+        rot_kp.pos[i] = p(i);
+        for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
+    }
+    return move(rot_kp);
+}
+
+template<typename T>
+auto imu_accumulative_forward(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> &g, \
+                Pose6D &icp_state)
+{
+    Pose6D rot_kp;
+    rot_kp.offset_time = t;
+    for (int i = 0; i < 3; i++)
+    {
+        rot_kp.acc[i] = a(i);
+        rot_kp.gyr[i] = g(i);
+        rot_kp.vel[i] = a*t;
+        rot_kp.pos[i] = p(i);
+        for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
+    }
+    return move(rot_kp);
+}
+
 /* comment
 plane equation: Ax + By + Cz + D = 0
 convert to: A/D*x + B/D*y + C/D*z = -1

@@ -102,7 +102,6 @@ vector<double>       extrinR(9, 0.0);
 deque<double>                     time_buffer;
 deque<PointCloudXYZI::Ptr>        lidar_buffer;
 deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
-
 PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI());
 PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
 PointCloudXYZI::Ptr feats_down_body(new PointCloudXYZI());
@@ -127,6 +126,7 @@ M3D Lidar_R_wrt_IMU(Eye3d);
 /*** EKF inputs and output ***/
 MeasureGroup Measures;
 esekfom::esekf<state_ikfom, 12, input_ikfom> kf;
+Pose6D icp_state;
 state_ikfom state_point;
 vect3 pos_lid;
 
@@ -866,7 +866,7 @@ int main(int argc, char** argv)
                 flg_first_scan = false;
                 continue;
             }
-            p_imu->Process(Measures, kf, feats_undistort);
+            p_imu->Process(Measures, kf, icp_state, feats_undistort);
 
 
 

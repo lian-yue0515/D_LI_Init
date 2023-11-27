@@ -3,7 +3,7 @@
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 4;
+    data_accum_length = 5;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
@@ -50,11 +50,6 @@ void Dynamic_init::clear() {
 bool Dynamic_init::Data_processing(MeasureGroup& meas)
 {
     Initialized_data.push_back(meas);
-    if( lidar_frame_count == 0 )
-    {
-        lidar_frame_count++;
-        return false;
-    }
     // Step 1: De-distort lidar data
     // deDistortLidar(meas);
     
@@ -68,7 +63,6 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas)
     lidar_frame_count++;
     if (lidar_frame_count <= data_accum_length)
     {
-        // If less than or equal to 4 frames, exit the function.
         return false;
     }
     return true; 
