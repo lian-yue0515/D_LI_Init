@@ -37,6 +37,7 @@ using namespace Eigen;
 #define DEBUG_FILE_DIR(name)     (string(string(ROOT_DIR) + "Log/"+ name))
 
 typedef lidar_dynamic_init::Pose6D Pose6D;
+
 typedef pcl::PointXYZINormal PointType;
 typedef pcl::PointCloud<PointType> PointCloudXYZI;
 typedef vector<PointType, Eigen::aligned_allocator<PointType>>  PointVector;
@@ -54,7 +55,16 @@ const M3D Eye3d(M3D::Identity());
 const M3F Eye3f(M3F::Identity());
 const V3D Zero3d(0, 0, 0);
 const V3F Zero3f(0, 0, 0);
-
+struct GYR_{
+    GYR_(){
+        rot.Identity();
+        angvel_last = Zero3d;
+        offset_time = 0;
+    };
+    V3D angvel_last;
+    M3D rot;
+    double offset_time;
+};
 struct MeasureGroup     // Lidar data and imu dates for the curent process
 {
     MeasureGroup()
@@ -186,34 +196,29 @@ auto set_pose6d(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> 
 }
 
 template<typename T>
-auto imu_accumulative_backward(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> &g, \
-                Pose6D &icp_state)
+auto imu_accumulative_backward(const double t, const Matrix<T, 3, 1> &g, \
+                const Matrix<T, 3, 3> &R)
 {
-    Pose6D rot_kp;
+    GYR_ rot_kp;
     rot_kp.offset_time = t;
     for (int i = 0; i < 3; i++)
     {
-        rot_kp.acc[i] = a(i);
         rot_kp.gyr[i] = g(i);
-        rot_kp.vel[i] = a*t;
-        rot_kp.pos[i] = p(i);
+        rot_kp.rot = icp_state.rot
         for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
     }
     return move(rot_kp);
 }
 
 template<typename T>
-auto imu_accumulative_forward(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> &g, \
-                Pose6D &icp_state)
+auto imu_accumulative_forward(const double t, const Matrix<T, 3, 1> &g, \
+                const Matrix<T, 3, 3> &R)
 {
-    Pose6D rot_kp;
+    GYR_ rot_kp;
     rot_kp.offset_time = t;
     for (int i = 0; i < 3; i++)
     {
-        rot_kp.acc[i] = a(i);
         rot_kp.gyr[i] = g(i);
-        rot_kp.vel[i] = a*t;
-        rot_kp.pos[i] = p(i);
         for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
     }
     return move(rot_kp);
