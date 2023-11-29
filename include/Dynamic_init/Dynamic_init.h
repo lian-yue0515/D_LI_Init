@@ -9,7 +9,6 @@
 #include <so3_math.h>
 #include <Eigen/Eigen>
 #include <condition_variable>
-#include <eigen_conversions/eigen_msg.h>
 #include <common_lib.h>
 #include <algorithm>
 #include <ceres/ceres.h>
@@ -232,7 +231,7 @@ public:
 
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                             const double &move_start_time);
-    bool Data_processing(MeasureGroup& meas);
+    bool Data_processing(MeasureGroup& meas);//, state_ikfom state
     void clear();
     void print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0);
 

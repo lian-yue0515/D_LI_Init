@@ -203,8 +203,7 @@ auto imu_accumulative_backward(const double t, const Matrix<T, 3, 1> &g, \
     rot_kp.offset_time = t;
     for (int i = 0; i < 3; i++)
     {
-        rot_kp.gyr[i] = g(i);
-        rot_kp.rot = icp_state.rot
+        rot_kp.angvel_last[i] = g(i);
         for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
     }
     return move(rot_kp);
@@ -218,7 +217,7 @@ auto imu_accumulative_forward(const double t, const Matrix<T, 3, 1> &g, \
     rot_kp.offset_time = t;
     for (int i = 0; i < 3; i++)
     {
-        rot_kp.gyr[i] = g(i);
+        rot_kp.angvel_last[i] = g(i);
         for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
     }
     return move(rot_kp);
