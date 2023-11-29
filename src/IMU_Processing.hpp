@@ -70,7 +70,7 @@ public:
 private:
     void IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N);
     void UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZI &pcl_in_out);
-    void UndistortPcl_dynamic(const MeasureGroup &meas, Pose6D &icp_state);
+    void UndistortPcl_dynamic(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state);
     PointCloudXYZI::Ptr cur_pcl_un_;
     sensor_msgs::ImuConstPtr last_imu_;
     deque<sensor_msgs::ImuConstPtr> v_imu_;
@@ -350,12 +350,12 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
     }
 }
 
-void ImuProcess::UndistortPcl_dynamic(const MeasureGroup &meas, Pose6D &icp_state)
+void ImuProcess::UndistortPcl_dynamic(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state)
 {
     if(first_point){
         last_meas_ = meas;
         auto v_imu = meas.imu;
-        M3D R_imu_(icp_state.rot);
+        M3D R_imu_(kf_state.rot);
         V3D angvel_avr_;
         double dt_ = 0;
         GYR_first.clear();
@@ -561,7 +561,7 @@ void ImuProcess::Process(const MeasureGroup &meas,
 
         UndistortPcl(meas, kf_state, *cur_pcl_un_);
     }else{
-        UndistortPcl_dynamic(meas, icp_state);
+        UndistortPcl_dynamic(meas, kf_state);
     }
 
 
