@@ -58,10 +58,10 @@ const V3F Zero3f(0, 0, 0);
 struct GYR_{
     GYR_(){
         rot.Identity();
-        angvel_last = Zero3d;
+        angvel = Zero3d;
         offset_time = 0;
     };
-    V3D angvel_last;
+    V3D angvel;
     M3D rot;
     double offset_time;
 };
@@ -83,17 +83,21 @@ struct StatesGroup
     StatesGroup() {
 		this->rot_end = M3D::Identity();
 		this->pos_end = Zero3d;
+        this->offset_R_L_I = M3D::Identity();
+        this->offset_T_L_I = Zero3d;
         this->vel_end = Zero3d;
         this->bias_g  = Zero3d;
         this->bias_a  = Zero3d;
         this->gravity = Zero3d;
         this->cov     = MD(DIM_STATE,DIM_STATE)::Identity() * INIT_COV;
-        this->cov.block<9,9>(9,9) = MD(9,9)::Identity() * 0.00001;
+        this->cov.block<9,9>(15,15) = MD(9,9)::Identity() * 0.00001;
 	};
 
     StatesGroup(const StatesGroup& b) {
 		this->rot_end = b.rot_end;
 		this->pos_end = b.pos_end;
+        this->offset_R_L_I = b.offset_R_L_I;
+        this->offset_T_L_I = b.offset_T_L_I;
         this->vel_end = b.vel_end;
         this->bias_g  = b.bias_g;
         this->bias_a  = b.bias_a;
@@ -105,6 +109,8 @@ struct StatesGroup
 	{
         this->rot_end = b.rot_end;
 		this->pos_end = b.pos_end;
+        this->offset_R_L_I = b.offset_R_L_I;
+        this->offset_T_L_I = b.offset_T_L_I;
         this->vel_end = b.vel_end;
         this->bias_g  = b.bias_g;
         this->bias_a  = b.bias_a;
@@ -118,10 +124,12 @@ struct StatesGroup
         StatesGroup a;
 		a.rot_end = this->rot_end * Exp(state_add(0,0), state_add(1,0), state_add(2,0));
 		a.pos_end = this->pos_end + state_add.block<3,1>(3,0);
-        a.vel_end = this->vel_end + state_add.block<3,1>(6,0);
-        a.bias_g  = this->bias_g  + state_add.block<3,1>(9,0);
-        a.bias_a  = this->bias_a  + state_add.block<3,1>(12,0);
-        a.gravity = this->gravity + state_add.block<3,1>(15,0);
+        a.offset_R_L_I = this->offset_R_L_I *  Exp(state_add(6,0), state_add(7,0), state_add(8,0));
+        a.offset_T_L_I = this->offset_T_L_I + state_add.block<3,1>(9,0);
+        a.vel_end = this->vel_end + state_add.block<3,1>(12,0);
+        a.bias_g  = this->bias_g  + state_add.block<3,1>(15,0);
+        a.bias_a  = this->bias_a  + state_add.block<3,1>(18,0);
+        a.gravity = this->gravity + state_add.block<3,1>(21,0);
         a.cov     = this->cov;
 		return a;
 	};
@@ -130,10 +138,12 @@ struct StatesGroup
 	{
         this->rot_end = this->rot_end * Exp(state_add(0,0), state_add(1,0), state_add(2,0));
 		this->pos_end += state_add.block<3,1>(3,0);
-        this->vel_end += state_add.block<3,1>(6,0);
-        this->bias_g  += state_add.block<3,1>(9,0);
-        this->bias_a  += state_add.block<3,1>(12,0);
-        this->gravity += state_add.block<3,1>(15,0);
+        this->offset_R_L_I = this->offset_R_L_I * Exp(state_add(6,0), state_add(7,0), state_add(8,0));
+        this->offset_T_L_I += state_add.block<3,1>(9,0);
+        this->vel_end += state_add.block<3,1>(12,0);
+        this->bias_g  += state_add.block<3,1>(15,0);
+        this->bias_a  += state_add.block<3,1>(18,0);
+        this->gravity += state_add.block<3,1>(21,0);
 		return *this;
 	};
 
@@ -143,10 +153,13 @@ struct StatesGroup
         M3D rotd(b.rot_end.transpose() * this->rot_end);
         a.block<3,1>(0,0)  = Log(rotd);
         a.block<3,1>(3,0)  = this->pos_end - b.pos_end;
-        a.block<3,1>(6,0)  = this->vel_end - b.vel_end;
-        a.block<3,1>(9,0)  = this->bias_g  - b.bias_g;
-        a.block<3,1>(12,0) = this->bias_a  - b.bias_a;
-        a.block<3,1>(15,0) = this->gravity - b.gravity;
+        M3D offsetd(b.offset_R_L_I.transpose() * this->offset_R_L_I);
+        a.block<3,1>(6,0) = Log(offsetd);
+        a.block<3,1>(9,0) = this->offset_T_L_I - b.offset_T_L_I;
+        a.block<3,1>(12,0)  = this->vel_end - b.vel_end;
+        a.block<3,1>(15,0)  = this->bias_g  - b.bias_g;
+        a.block<3,1>(18,0) = this->bias_a  - b.bias_a;
+        a.block<3,1>(21,0) = this->gravity - b.gravity;
 		return a;
 	};
 
@@ -159,6 +172,8 @@ struct StatesGroup
 
 	M3D rot_end;      // the estimated attitude (rotation matrix) at the end lidar point
     V3D pos_end;      // the estimated position at the end lidar point (world frame)
+    M3D offset_R_L_I; // Rotation from Lidar frame L to IMU frame I
+    V3D offset_T_L_I; // Translation from Lidar frame L to IMU frame I
     V3D vel_end;      // the estimated velocity at the end lidar point (world frame)
     V3D bias_g;       // gyroscope bias
     V3D bias_a;       // accelerator bias
@@ -196,32 +211,19 @@ auto set_pose6d(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> 
 }
 
 template<typename T>
-auto imu_accumulative_backward(const double t, const Matrix<T, 3, 1> &g, \
+auto imu_accumulative(const double t, const Matrix<T, 3, 1> &g, \
                 const Matrix<T, 3, 3> &R)
 {
     GYR_ rot_kp;
     rot_kp.offset_time = t;
     for (int i = 0; i < 3; i++)
     {
-        rot_kp.angvel_last[i] = g(i);
-        for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
+        rot_kp.angvel[i] = g(i);
+        for (int j = 0; j < 3; j++)  rot_kp.rot(i, j) = R(i,j);
     }
     return move(rot_kp);
 }
 
-template<typename T>
-auto imu_accumulative_forward(const double t, const Matrix<T, 3, 1> &g, \
-                const Matrix<T, 3, 3> &R)
-{
-    GYR_ rot_kp;
-    rot_kp.offset_time = t;
-    for (int i = 0; i < 3; i++)
-    {
-        rot_kp.angvel_last[i] = g(i);
-        for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
-    }
-    return move(rot_kp);
-}
 
 /* comment
 plane equation: Ax + By + Cz + D = 0

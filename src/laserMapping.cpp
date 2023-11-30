@@ -26,6 +26,7 @@
 #include "preprocess.h"
 #include <ikd-Tree/ikd_Tree.h>
 #include <Dynamic_init/Dynamic_init.h>
+#include <pcl/io/pcd_io.h>
 #define INIT_TIME           (0.1)
 #define LASER_POINT_COV     (0.001)
 #define MAXN                (720000)
@@ -91,8 +92,8 @@ M3D Lidar_R_wrt_IMU(Eye3d);
 
 /*** EKF inputs and output ***/
 MeasureGroup Measures;
+StatesGroup icp_state;
 esekfom::esekf<state_ikfom, 12, input_ikfom> kf;
-Pose6D icp_state;
 state_ikfom state_point;
 vect3 pos_lid;
 
@@ -833,8 +834,20 @@ int main(int argc, char** argv)
                 continue;
             }
 
-
-            
+            if(dynamic_init->Data_processing(Measures, icp_state))
+            {
+                if(!dynamic_init->Undistortpoint.empty())
+                {
+                    for(int i = 0; i < dynamic_init->Undistortpoint.size(); i++){
+                        std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian_" + std::to_string(i) + ".pcd";
+                        pcl::io::savePCDFile(filename, *(dynamic_init->Undistortpoint[i]));
+                    }
+                }
+                return 0;
+            }else{
+                cout<<"oh no"<<endl;
+            }
+                        
             p_imu->Process(Measures, kf, feats_undistort);
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;

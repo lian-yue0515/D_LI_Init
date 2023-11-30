@@ -1,15 +1,21 @@
 #include "Dynamic_init.h"
 
+double last_lidar_end_time_;   
+V3D angvel_last;\
+sensor_msgs::ImuConstPtr last_imu_;
+const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
+
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 5;
+    data_accum_length = 4;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
     Grav_L0 = Zero3d;
     V_0 = Zero3d;
-    first_deDistortLidar = false;
+    first_point = true;
+    second_point = true;
 }
 
 Dynamic_init::~Dynamic_init() = default;
@@ -47,28 +53,193 @@ void Dynamic_init::clear() {
     cout << "\x1B[2J\x1B[H";
 }
 
-bool Dynamic_init::Data_processing(MeasureGroup& meas)//, state_ikfom state
+bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//, state_ikfom state
 {
+    std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_" + std::to_string(lidar_frame_count) + ".pcd";
+    pcl::io::savePCDFile(filename, *(meas.lidar));
+    std::cerr << "Saved " << (*(meas.lidar)).size () << " data points to file.pcd." << std::endl;
     Initialized_data.push_back(meas);
-    // Step 1: De-distort lidar data
-    // deDistortLidar(meas);
+    if(first_point){
+        first_point = false;
+        second_point = true;
+        lidar_frame_count++;
+        last_imu_ = Initialized_data[0].imu.back();
+        return 0;
+    }
+    auto v_imu = meas.imu;
+    v_imu.push_front(last_imu_);
+    auto pcl_current = *(meas.lidar);
+    double pcl_beg_time, pcl_end_time;
+    pcl_beg_time = meas.lidar_beg_time;
+    /*** sort point clouds by offset time ***/
+    sort(pcl_current.points.begin(), pcl_current.points.end(), time_);
+    pcl_end_time = pcl_beg_time + pcl_current.points.back().curvature / double(1000);
+    double imu_end_time = v_imu.back()->header.stamp.toSec();
+
+    const double &pcl_end_offset_time = pcl_current.points.back().curvature / double(1000);
+
+    /*** speed calculation ***/
+    auto pcl_last = *(Initialized_data[Initialized_data.size()-2].lidar);
+    Eigen::Vector4f last_cen;					
+    pcl::compute3DCentroid(pcl_last, last_cen);	
+    Eigen::Vector4f current_cen;
+    float timediff = pcl_end_time - pcl_beg_time;			
+    pcl::compute3DCentroid(pcl_current, current_cen);	
+    V3D displacement = V3D(current_cen[0] - last_cen[0], 
+                        current_cen[1] - last_cen[1], 
+                    current_cen[2] - last_cen[2]);
+    V3D vel_cen = - displacement/timediff;      //Velocity direction opposite to numerical calculation
     
-    // Step 2: Use ICP for trajectory estimation and save the odomentry.
-    // estimateTrajectoryICP(meas.lidar);
-    
-    // Step 3: Perform IMU pre-integration and estimate the odomentry.
-    // preintegrateIMU(meas.imu);
-    
-    // Step 4: Check the count of received lidar data frames.
-    lidar_frame_count++;
-    if (lidar_frame_count <= data_accum_length)
+    if(second_point)  //Motion distortion removal for first
     {
+        second_point = false;
+        auto v_imu_ = Initialized_data[0].imu;
+        double dt_ = 0;
+        M3D R_imu_(icp_state.rot_end);
+        V3D angvel_avr_;
+        double imu_end_time_ = v_imu_.back()->header.stamp.toSec();
+        double pcl_beg_time_, pcl_end_time_;
+        pcl_beg_time_ = Initialized_data[0].lidar_beg_time;
+        /*** sort point clouds by offset time ***/
+        sort(pcl_last.points.begin(), pcl_last.points.end(), time_);
+        pcl_end_time_ = pcl_beg_time_ + pcl_last.points.back().curvature / double(1000);
+        const double &pcl_end_offset_time_ = pcl_current.points.back().curvature / double(1000);
+        GYR_first.clear();
+        GYR_first.push_back(imu_accumulative(0.0, angvel_avr_, R_imu_));
+        /*** forward propagation at each imu point ***/
+        for (auto it_imu = v_imu_.end(); it_imu < (v_imu_.begin() + 1); it_imu--)
+        {
+            auto &&head = *(it_imu);
+            auto &&tail = *(it_imu - 1);
+            if (tail->header.stamp.toSec() < last_lidar_end_time_)
+                continue;
+            angvel_avr_ << 0.5 * (head->angular_velocity.x + tail->angular_velocity.x),
+                0.5 * (head->angular_velocity.y + tail->angular_velocity.y),
+                0.5 * (head->angular_velocity.z + tail->angular_velocity.z);
+            if(head->header.stamp.toSec() < last_lidar_end_time_)
+                dt_ = tail->header.stamp.toSec() - last_lidar_end_time_;
+            else
+                dt_ = tail->header.stamp.toSec() - head->header.stamp.toSec();
+            R_imu_ = R_imu_*Exp(angvel_avr_, dt_);
+            /* save the poses at each IMU gyr */
+            angvel_avr_ = angvel_avr_;    //Initial default bias is zero
+            double &&offs_t = tail->header.stamp.toSec() - pcl_end_time_;
+            GYR_first.push_back(imu_accumulative(offs_t, angvel_avr_, R_imu_));
+        }
+        last_lidar_end_time_ = pcl_end_time;
+        last_imu_ = Initialized_data[0].imu.back();
+
+        //for first:
+        /*** undistort each lidar point (backward propagation) ***/
+        auto it_pcl = pcl_last.points.end() - 1; //a single point in k-th frame
+        for (auto it_kp = GYR_first.begin() + 1 ; it_kp != GYR_first.end(); it_kp++)
+        {
+            double dt, dt_j;
+            auto head = it_kp + 1;
+            M3D R; 
+            V3D ANGVEL;
+            R = (head->rot).inverse();
+            ANGVEL << VEC_FROM_ARRAY(head->angvel);
+            ANGVEL = -ANGVEL;
+            for (; it_pcl->curvature / double(1000) > head->offset_time; it_pcl--) {
+                dt = it_pcl->curvature / double(1000) - head->offset_time; //dt = t_j - t_i > 0
+                /* Transform to the 'scan-end' IMU frame（I_k frame)*/
+                M3D R_i(R * Exp(ANGVEL, dt));
+                V3D p_in(it_pcl->x, it_pcl->y, it_pcl->z);
+                V3D P_compensate = icp_state.offset_R_L_I.transpose() * (R_imu_.transpose() * (R_i * (icp_state.offset_R_L_I * p_in + icp_state.offset_T_L_I) - icp_state.pos_end) - icp_state.offset_T_L_I);
+
+                dt_j= pcl_end_offset_time - it_pcl->curvature/double(1000);
+                V3D p_jk;
+                p_jk = - (icp_state.rot_end).transpose() * vel_cen * dt_j;
+                P_compensate = P_compensate + p_jk;
+                
+                /// save Undistorted points
+                it_pcl->x = P_compensate(0);
+                it_pcl->y = P_compensate(1);
+                it_pcl->z = P_compensate(2);
+                if (it_pcl == pcl_last.points.begin()) break;
+            }
+        }
+        Undistortpoint.push_back(pcl_last.makeShared());
+    }
+
+    V3D angvel_avr, vel_imu(icp_state.vel_end), pos_imu(icp_state.pos_end);
+    M3D R_imu(icp_state.rot_end);
+    /*** Initialize IMU pose ***/
+    GYR_pose.clear();
+    GYR_pose.push_back(imu_accumulative(0.0, angvel_last, R_imu));
+    /*** forward propagation at each imu point ***/
+    double dt = 0;
+    for (auto it_imu = v_imu.begin(); it_imu < (v_imu.end() - 1); it_imu++)
+    {
+        auto &&head = *(it_imu);
+        auto &&tail = *(it_imu + 1);
+
+        if (tail->header.stamp.toSec() < last_lidar_end_time_)
+            continue;
+
+        angvel_avr << 0.5 * (head->angular_velocity.x + tail->angular_velocity.x),
+            0.5 * (head->angular_velocity.y + tail->angular_velocity.y),
+            0.5 * (head->angular_velocity.z + tail->angular_velocity.z);
+        if(head->header.stamp.toSec() < last_lidar_end_time_)
+            dt = tail->header.stamp.toSec() - last_lidar_end_time_;
+        else
+            dt = tail->header.stamp.toSec() - head->header.stamp.toSec();
+        R_imu = R_imu*Exp(angvel_avr, dt);
+        angvel_last = angvel_avr;
+        double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;
+        GYR_pose.push_back(imu_accumulative(offs_t, angvel_last, R_imu));
+    }
+    /*** calculated the pos and attitude prediction at the frame-end ***/
+    double note = pcl_end_time > imu_end_time ? 1.0 : -1.0;
+    dt = note * (pcl_end_time - imu_end_time);
+    icp_state.vel_end = vel_cen;
+    icp_state.rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);
+    icp_state.pos_end = pos_imu + vel_cen*(pcl_end_time - pcl_beg_time);
+
+    last_imu_ = meas.imu.back();
+    last_lidar_end_time_ = pcl_end_time;
+    double dt_j = 0.0;
+    /*** undistort each lidar point (backward propagation) ***/
+    //for next:
+    auto it_pcl = pcl_current.points.end() - 1; //a single point in k-th frame
+    for (auto it_kp = GYR_pose.end() - 1; it_kp != GYR_pose.begin(); it_kp--)
+    {
+        auto head = it_kp - 1;
+        R_imu = head->rot;
+        angvel_avr << VEC_FROM_ARRAY(head->angvel);
+        for (; it_pcl->curvature / double(1000) > head->offset_time; it_pcl--) {
+            dt = it_pcl->curvature / double(1000) - head->offset_time; //dt = t_j - t_i > 0
+            /* Transform to the 'scan-end' IMU frame（I_k frame)*/
+            M3D R_i(R_imu * Exp(angvel_avr, dt));
+            V3D p_in(it_pcl->x, it_pcl->y, it_pcl->z);
+            V3D P_compensate = icp_state.offset_R_L_I.transpose() * (icp_state.rot_end.transpose() * (R_i * (icp_state.offset_R_L_I * p_in + icp_state.offset_T_L_I) - icp_state.pos_end) - icp_state.offset_T_L_I);
+            
+            dt_j= pcl_end_offset_time - it_pcl->curvature/double(1000);
+            V3D p_jk;
+            p_jk = - icp_state.rot_end.transpose() * icp_state.vel_end * dt_j;
+            P_compensate = P_compensate + p_jk;
+            
+            /// save Undistorted points
+            it_pcl->x = P_compensate(0);
+            it_pcl->y = P_compensate(1);
+            it_pcl->z = P_compensate(2);
+            if (it_pcl == pcl_current.points.begin()) break;
+        }
+    }
+    Undistortpoint.push_back(pcl_current.makeShared());
+    if (lidar_frame_count < data_accum_length)
+    {
+        lidar_frame_count++;
         return false;
     }
     return true; 
 }
 
-
+void Data_propagate(){
+    //Calculate icp odometer as well as IMU preintegration
+    
+}
 
 void Dynamic_init::Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                                 const double &move_start_time) {

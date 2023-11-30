@@ -14,6 +14,7 @@
 #include <ceres/ceres.h>
 #include <sys/time.h>
 #include "matplotlibcpp.h"
+#include <pcl/io/pcd_io.h>
 
 #define FILE_DIR(name)     (string(string(ROOT_DIR) + "Log/"+ name))
 
@@ -208,11 +209,14 @@ class Dynamic_init {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     ofstream fout_LiDAR_meas, fout_IMU_meas;
-    double data_accum_length;
-    double lidar_frame_count;
-    bool first_deDistortLidar;
+    int data_accum_length;
+    int lidar_frame_count;
+    bool first_point, second_point;
     CalibState IMU_state;
     CalibState Lidar_state;
+    std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr> Undistortpoint;
+    vector<GYR_> GYR_first;
+    vector<GYR_> GYR_pose;
 
     Dynamic_init();
 
@@ -231,7 +235,8 @@ public:
 
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                             const double &move_start_time);
-    bool Data_processing(MeasureGroup& meas);//, state_ikfom state
+    bool Data_processing(MeasureGroup& meas, StatesGroup icp_state);
+    void Data_propagate();
     void clear();
     void print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0);
 
