@@ -1,9 +1,43 @@
 #include "Dynamic_init.h"
-
+#include <pcl/registration/icp.h>
+#include <pcl/common/common.h>
+#include <pcl/common/transforms.h>
 double last_lidar_end_time_;   
 V3D angvel_last;\
 sensor_msgs::ImuConstPtr last_imu_;
 const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
+Pose pose_cur{0,0,0,0,0,0};
+Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCloud<pcl::PointXYZINormal> targetKeyframeCloud)
+{
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr sourcePtr = cureKeyframeCloud.makeShared();
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr targetPtr = targetKeyframeCloud.makeShared();
+    pcl::IterativeClosestPoint<pcl::PointXYZINormal, pcl::PointXYZINormal> icp;
+    icp.setMaxCorrespondenceDistance(50);
+    icp.setMaximumIterations(50);
+    icp.setTransformationEpsilon(1e-6);
+    icp.setEuclideanFitnessEpsilon(1e-6);
+    icp.setRANSACIterations(0);
+    // Align pointclouds 
+    icp.setInputSource(sourcePtr);
+    icp.setInputTarget(targetPtr);
+    pcl::PointCloud<pcl::PointXYZINormal>::Ptr unused_result(new pcl::PointCloud<pcl::PointXYZINormal>());
+    icp.align(*unused_result);
+    float loopFitnessScoreThreshold = 0.8;
+    if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold)
+    {
+        std::cout << "ICP odometry failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << std::endl;
+    }
+    else
+    {
+        std::cout << "ICP odometry passed (" << icp.getFitnessScore() << " < " << loopFitnessScoreThreshold << std::endl;
+    }
+    float x, y, z, roll, pitch, yaw;
+    Eigen::Affine3f correctionLidarFrame;
+    correctionLidarFrame = icp.getFinalTransformation();
+    pcl::getTranslationAndEulerAngles (correctionLidarFrame, x, y, z, roll, pitch, yaw);
+    return Pose{x, y, z, roll, pitch, yaw};
+
+} 
 
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
@@ -89,7 +123,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
                         current_cen[1] - last_cen[1], 
                     current_cen[2] - last_cen[2]);
     V3D vel_cen = - displacement/timediff;      //Velocity direction opposite to numerical calculation
-    
+    cout<<"velocity for "<<lidar_frame_count<<" frame: "<<vel_cen<<endl;
     if(second_point)  //Motion distortion removal for first
     {
         second_point = false;
@@ -161,6 +195,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
             }
         }
         Undistortpoint.push_back(pcl_last.makeShared());
+
     }
 
     V3D angvel_avr, vel_imu(icp_state.vel_end), pos_imu(icp_state.pos_end);
@@ -228,6 +263,10 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         }
     }
     Undistortpoint.push_back(pcl_current.makeShared());
+    icpodom.push_back(doICP(*Undistortpoint[Undistortpoint.size()-2],*Undistortpoint.back()));
+    pose_cur = pose_cur.addPoses(icpodom.back());
+    icp_state.rot_end = pose_cur.poseto_rotation();
+    icp_state.pos_end = pose_cur.poseto_position();
     if (lidar_frame_count < data_accum_length)
     {
         lidar_frame_count++;
@@ -236,8 +275,10 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
     return true; 
 }
 
-void Data_propagate(){
+void Dynamic_init::Data_propagate(){
     //Calculate icp odometer as well as IMU preintegration
+    
+    return;
     
 }
 

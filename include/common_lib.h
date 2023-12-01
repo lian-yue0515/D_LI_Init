@@ -294,4 +294,79 @@ bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &
     return true;
 }
 
+
+struct Pose {
+    double x;
+    double y;
+    double z;
+    double roll;
+    double pitch;
+    double yaw;
+    V3D poseto_position()
+    {
+        V3D position(x, y, z);
+        return position;
+    }
+    M3D poseto_rotation()
+    {
+        Eigen::AngleAxisd rollAngle(roll, Eigen::Vector3d::UnitX());
+        Eigen::AngleAxisd pitchAngle(pitch, Eigen::Vector3d::UnitY());
+        Eigen::AngleAxisd yawAngle(yaw, Eigen::Vector3d::UnitZ());
+        
+        Eigen::Quaternion<double> q = yawAngle * pitchAngle * rollAngle;
+        
+        M3D rotationMatrix = q.matrix();
+        return rotationMatrix;
+    }
+    Pose addPoses(const Pose& pose2) {
+        // 创建位置向量
+        V3D position1(x, y, z);
+        V3D position2(pose2.x, pose2.y, pose2.z);
+
+        // 创建旋转矩阵
+        Eigen::AngleAxisd rollAngle1(roll, Eigen::Vector3d::UnitX());
+        Eigen::AngleAxisd pitchAngle1(pitch, Eigen::Vector3d::UnitY());
+        Eigen::AngleAxisd yawAngle1(yaw, Eigen::Vector3d::UnitZ());
+
+        Eigen::AngleAxisd rollAngle2(pose2.roll, Eigen::Vector3d::UnitX());
+        Eigen::AngleAxisd pitchAngle2(pose2.pitch, Eigen::Vector3d::UnitY());
+        Eigen::AngleAxisd yawAngle2(pose2.yaw, Eigen::Vector3d::UnitZ());
+
+        Eigen::Quaternion<double> q1 = yawAngle1 * pitchAngle1 * rollAngle1;
+        Eigen::Quaternion<double> q2 = yawAngle2 * pitchAngle2 * rollAngle2;
+
+        // 累加位置
+        V3D position = position1 + position2;
+
+        // 累加旋转
+        Eigen::Quaternion<double> q = q1 * q2;
+
+        // 将旋转转换为欧拉角
+        Eigen::Vector3d euler = q.toRotationMatrix().eulerAngles(2, 1, 0); // yaw, pitch, roll
+
+        // 创建结果 Pose
+        Pose result;
+        result.x = position.x();
+        result.y = position.y();
+        result.z = position.z();
+        result.roll = euler.z();
+        result.pitch = euler.y();
+        result.yaw = euler.x();
+
+        return result;
+    }
+    Pose diffpose(Pose _p2)
+    {
+        Eigen::Affine3f SE3_p1 = pcl::getTransformation(x, y, z, roll, pitch, yaw);
+        Eigen::Affine3f SE3_p2 = pcl::getTransformation(_p2.x, _p2.y, _p2.z, _p2.roll, _p2.pitch, _p2.yaw);
+        Eigen::Matrix4f SE3_delta0 = SE3_p1.matrix().inverse() * SE3_p2.matrix();
+        Eigen::Affine3f SE3_delta;
+        SE3_delta.matrix() = SE3_delta0;
+        float dx, dy, dz, droll, dpitch, dyaw;
+        pcl::getTranslationAndEulerAngles(SE3_delta, dx, dy, dz, droll, dpitch, dyaw);
+
+        return Pose{dx, dy, dz, droll, dpitch, dyaw};
+    }
+};
+
 #endif

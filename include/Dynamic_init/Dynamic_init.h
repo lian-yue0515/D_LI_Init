@@ -217,6 +217,7 @@ public:
     std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr> Undistortpoint;
     vector<GYR_> GYR_first;
     vector<GYR_> GYR_pose;
+    vector<Pose> icpodom;
 
     Dynamic_init();
 
