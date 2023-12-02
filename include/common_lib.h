@@ -43,6 +43,8 @@ typedef pcl::PointCloud<PointType> PointCloudXYZI;
 typedef vector<PointType, Eigen::aligned_allocator<PointType>>  PointVector;
 typedef Vector3d V3D;
 typedef Matrix3d M3D;
+using M9D = Eigen::Matrix<double, 9, 9>;
+using M6D = Eigen::Matrix<double, 6, 6>;
 typedef Vector3f V3F;
 typedef Matrix3f M3F;
 

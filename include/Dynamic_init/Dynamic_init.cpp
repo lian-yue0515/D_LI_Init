@@ -2,8 +2,9 @@
 #include <pcl/registration/icp.h>
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
+#include "IMUPreintegration.hpp"
 double last_lidar_end_time_;   
-V3D angvel_last;\
+V3D angvel_last;
 sensor_msgs::ImuConstPtr last_imu_;
 const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
 Pose pose_cur{0,0,0,0,0,0};

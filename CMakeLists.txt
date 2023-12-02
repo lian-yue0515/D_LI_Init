@@ -4,8 +4,7 @@ project(lidar_dynamic_init)
 SET(CMAKE_BUILD_TYPE "Release")
 
 ADD_COMPILE_OPTIONS(-std=c++14 )
-ADD_COMPILE_OPTIONS(-std=c++14 )
-set( CMAKE_CXX_FLAGS "-std=c++14 -O3" )
+set( CMAKE_CXX_FLAGS "-std=c++17 -O3" )
 
 add_definitions(-DROOT_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
 
@@ -13,7 +12,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fexceptions" )
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -pthread -std=c++0x -std=c++14 -fexceptions")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread -std=c++0x -std=c++14 -fexceptions")
 
 message("Current CPU archtecture: ${CMAKE_SYSTEM_PROCESSOR}")
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)" )
@@ -55,10 +54,12 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   eigen_conversions
 )
-
+find_package(Sophus REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(PCL 1.8 REQUIRED)
 find_package(Ceres REQUIRED)
+find_package(fmt REQUIRED)
+set (FMT_LIBRARIES fmt::fmt)
 
 message(Eigen: ${EIGEN3_INCLUDE_DIR})
 
@@ -67,6 +68,7 @@ include_directories(
   ${EIGEN3_INCLUDE_DIR}
   ${PCL_INCLUDE_DIRS}
   ${PYTHON_INCLUDE_DIRS}
+  ${Sophus_INCLUDE_DIRS}
   include)
 
 add_message_files(
@@ -90,5 +92,5 @@ add_executable(dynamic_init
             include/ikd-Tree/ikd_Tree.cpp 
             include/Dynamic_init/Dynamic_init.cpp
             src/preprocess.cpp)
-target_link_libraries(dynamic_init ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES})
+target_link_libraries(dynamic_init ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES} ${Sophus_LIBRARIES} fmt)
 target_include_directories(dynamic_init PRIVATE ${PYTHON_INCLUDE_DIRS})
