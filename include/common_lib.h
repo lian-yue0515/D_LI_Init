@@ -320,43 +320,7 @@ struct Pose {
         M3D rotationMatrix = q.matrix();
         return rotationMatrix;
     }
-    Pose addPoses(const Pose& pose2) {
-        // 创建位置向量
-        V3D position1(x, y, z);
-        V3D position2(pose2.x, pose2.y, pose2.z);
-
-        // 创建旋转矩阵
-        Eigen::AngleAxisd rollAngle1(roll, Eigen::Vector3d::UnitX());
-        Eigen::AngleAxisd pitchAngle1(pitch, Eigen::Vector3d::UnitY());
-        Eigen::AngleAxisd yawAngle1(yaw, Eigen::Vector3d::UnitZ());
-
-        Eigen::AngleAxisd rollAngle2(pose2.roll, Eigen::Vector3d::UnitX());
-        Eigen::AngleAxisd pitchAngle2(pose2.pitch, Eigen::Vector3d::UnitY());
-        Eigen::AngleAxisd yawAngle2(pose2.yaw, Eigen::Vector3d::UnitZ());
-
-        Eigen::Quaternion<double> q1 = yawAngle1 * pitchAngle1 * rollAngle1;
-        Eigen::Quaternion<double> q2 = yawAngle2 * pitchAngle2 * rollAngle2;
-
-        // 累加位置
-        V3D position = position1 + position2;
-
-        // 累加旋转
-        Eigen::Quaternion<double> q = q1 * q2;
-
-        // 将旋转转换为欧拉角
-        Eigen::Vector3d euler = q.toRotationMatrix().eulerAngles(2, 1, 0); // yaw, pitch, roll
-
-        // 创建结果 Pose
-        Pose result;
-        result.x = position.x();
-        result.y = position.y();
-        result.z = position.z();
-        result.roll = euler.z();
-        result.pitch = euler.y();
-        result.yaw = euler.x();
-
-        return result;
-    }
+    
     Pose diffpose(Pose _p2)
     {
         Eigen::Affine3f SE3_p1 = pcl::getTransformation(x, y, z, roll, pitch, yaw);
@@ -369,6 +333,22 @@ struct Pose {
 
         return Pose{dx, dy, dz, droll, dpitch, dyaw};
     }
+    Pose addPoses(const Pose& pose1,const Pose& pose2) {
+        Pose poseOut;
+        Eigen::Affine3f posein_a = pcl::getTransformation(pose1.x, pose1.y, pose1.z, pose1.roll, pose1.pitch, pose1.yaw);
+        Eigen::Affine3f poseout_a = pcl::getTransformation(pose2.x, pose2.y, pose2.z, pose2.roll, pose2.pitch, pose2.yaw);;
+        Eigen::Affine3f Out_a = poseout_a * posein_a;
+        float tx, ty, tz, roll, pitch, yaw;
+        pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, roll, pitch, yaw);
+        poseOut.x = tx;
+        poseOut.y = ty;
+        poseOut.z = tz;
+        poseOut.roll = roll;
+        poseOut.pitch = pitch;
+        poseOut.yaw = yaw;
+        return poseOut;
+    }
 };
+
 
 #endif

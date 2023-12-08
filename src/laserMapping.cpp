@@ -112,6 +112,29 @@ float calc_dist(PointType p1, PointType p2) {
     return d;
 }
 
+pcl::PointCloud<PointType>::Ptr local2global(const pcl::PointCloud<PointType>::Ptr &cloudIn, const Pose &tf)
+{
+    pcl::PointCloud<PointType>::Ptr cloudOut(new pcl::PointCloud<PointType>());
+
+    int cloudSize = cloudIn->size();
+    cloudOut->resize(cloudSize);
+
+    Eigen::Affine3f transCur = pcl::getTransformation(tf.x, tf.y, tf.z, tf.roll, tf.pitch, tf.yaw);
+
+    int numberOfCores = 16;
+#pragma omp parallel for num_threads(numberOfCores)
+    for (int i = 0; i < cloudSize; ++i)
+    {
+        const auto &pointFrom = cloudIn->points[i];
+        cloudOut->points[i].x = transCur(0, 0) * pointFrom.x + transCur(0, 1) * pointFrom.y + transCur(0, 2) * pointFrom.z + transCur(0, 3);
+        cloudOut->points[i].y = transCur(1, 0) * pointFrom.x + transCur(1, 1) * pointFrom.y + transCur(1, 2) * pointFrom.z + transCur(1, 3);
+        cloudOut->points[i].z = transCur(2, 0) * pointFrom.x + transCur(2, 1) * pointFrom.y + transCur(2, 2) * pointFrom.z + transCur(2, 3);
+        cloudOut->points[i].intensity = pointFrom.intensity;
+    }
+
+    return cloudOut;
+}
+
 void SigHandle(int sig)
 {
     flg_exit = true;
@@ -836,14 +859,40 @@ int main(int argc, char** argv)
 
             if(dynamic_init->Data_processing(Measures, icp_state))
             {
-                if(!dynamic_init->Undistortpoint.empty())
+                if(!dynamic_init->Undistortpoint.empty() && !dynamic_init->Initialized_data.empty())
                 {
+                    pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
+                    pcl::PointCloud<PointType>::Ptr cloudshowqujibian_i(new pcl::PointCloud<PointType>());
+                    std::string filenamequjibian = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian.pcd";
+                    std::string filenamequjibian_i = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian_i.pcd";
                     for(int i = 0; i < dynamic_init->Undistortpoint.size(); i++){
-                        std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian_" + std::to_string(i) + ".pcd";
-                        pcl::io::savePCDFile(filename, *(dynamic_init->Undistortpoint[i]));
+                        *cloudshowqujibian += *dynamic_init->Undistortpoint[i];
+                        *cloudshowqujibian_i += *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
+                        pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                        *cloudshow = *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
+                        std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian"+ std::to_string(i)+ ".pcd";
+                        pcl::io::savePCDFile(filename, *(cloudshow));
                     }
+                    pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
+                    pcl::io::savePCDFile(filenamequjibian_i, *(cloudshowqujibian_i));
+                    
+                    std::string filenameyuanshi = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi.pcd";
+                    pcl::PointCloud<PointType>::Ptr cloudshowyuanshi(new pcl::PointCloud<PointType>());
+                    std::string filenameyuanshi_no = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_no.pcd";
+                    pcl::PointCloud<PointType>::Ptr cloudshowyuanshi_no(new pcl::PointCloud<PointType>());
+                    for (int i = 0; i < dynamic_init->Initialized_data.size(); i++)
+                    {
+                        *cloudshowyuanshi += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
+                        *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
+                        pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                        *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
+                        std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
+                        pcl::io::savePCDFile(filename, *(cloudshow));
+                    }
+                    pcl::io::savePCDFile(filenameyuanshi, *(cloudshowyuanshi));
+                    pcl::io::savePCDFile(filenameyuanshi_no, *(cloudshowyuanshi_no));
+                    
                 }
-                
                 return 0;
             }else{
                 cout<<"oh no"<<endl;

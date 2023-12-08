@@ -8,6 +8,7 @@ V3D angvel_last;
 sensor_msgs::ImuConstPtr last_imu_;
 const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
 Pose pose_cur{0,0,0,0,0,0};
+Pose pose_cur_no{0,0,0,0,0,0};
 Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCloud<pcl::PointXYZINormal> targetKeyframeCloud)
 {
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr sourcePtr = cureKeyframeCloud.makeShared();
@@ -43,7 +44,7 @@ Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCl
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 4;
+    data_accum_length = 5;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
@@ -90,9 +91,6 @@ void Dynamic_init::clear() {
 
 bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//, state_ikfom state
 {
-    std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_" + std::to_string(lidar_frame_count) + ".pcd";
-    pcl::io::savePCDFile(filename, *(meas.lidar));
-    std::cerr << "Saved " << (*(meas.lidar)).size () << " data points to file.pcd." << std::endl;
     Initialized_data.push_back(meas);
     if(first_point){
         first_point = false;
@@ -100,6 +98,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         lidar_frame_count++;
         last_imu_ = Initialized_data[0].imu.back();
         return 0;
+        odom.push_back(pose_cur);
     }
     auto v_imu = meas.imu;
     v_imu.push_front(last_imu_);
@@ -249,7 +248,9 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
             /* Transform to the 'scan-end' IMU frame（I_k frame)*/
             M3D R_i(R_imu * Exp(angvel_avr, dt));
             V3D p_in(it_pcl->x, it_pcl->y, it_pcl->z);
-            V3D P_compensate = icp_state.offset_R_L_I.transpose() * (icp_state.rot_end.transpose() * (R_i * (icp_state.offset_R_L_I * p_in + icp_state.offset_T_L_I) - icp_state.pos_end) - icp_state.offset_T_L_I);
+            V3D P_compensate = icp_state.offset_R_L_I.transpose() * (icp_state.rot_end.transpose() * \
+                (R_i * (icp_state.offset_R_L_I * p_in + icp_state.offset_T_L_I) - icp_state.pos_end) - \
+                icp_state.offset_T_L_I);
             
             dt_j= pcl_end_offset_time - it_pcl->curvature/double(1000);
             V3D p_jk;
@@ -264,10 +265,15 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         }
     }
     Undistortpoint.push_back(pcl_current.makeShared());
-    icpodom.push_back(doICP(*Undistortpoint[Undistortpoint.size()-2],*Undistortpoint.back()));
-    pose_cur = pose_cur.addPoses(icpodom.back());
-    icp_state.rot_end = pose_cur.poseto_rotation();
-    icp_state.pos_end = pose_cur.poseto_position();
+    icpodom.push_back(doICP(*Undistortpoint.back(), *Undistortpoint[Undistortpoint.size()-2]));
+    pose_cur = pose_cur.addPoses(pose_cur, icpodom.back());
+    odom.push_back(pose_cur);
+
+    icpodom_no.push_back(doICP(*Initialized_data.back().lidar, *Initialized_data[Initialized_data.size()-2].lidar));
+    pose_cur_no = pose_cur_no.addPoses(pose_cur_no, icpodom_no.back());
+    odom_no.push_back(pose_cur_no);
+    // icp_state.rot_end = pose_cur.poseto_rotation();
+    // icp_state.pos_end = pose_cur.poseto_position();
     if (lidar_frame_count < data_accum_length)
     {
         lidar_frame_count++;

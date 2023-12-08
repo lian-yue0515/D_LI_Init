@@ -218,6 +218,10 @@ public:
     vector<GYR_> GYR_first;
     vector<GYR_> GYR_pose;
     vector<Pose> icpodom;
+    vector<Pose> icpodom_no;
+    vector<Pose> odom;
+    vector<Pose> odom_no;
+    vector<MeasureGroup> Initialized_data;
 
     Dynamic_init();
 
@@ -280,7 +284,6 @@ private:
     deque<CalibState> IMU_state_group;
     deque<CalibState> Lidar_state_group;
     deque<CalibState> IMU_state_group_ALL;
-    vector<MeasureGroup> Initialized_data;
     /// Parameters needed to be calibrateds
     V3D Grav_L0;                  // Gravity vector in the initial Lidar frame L_0
     V3D gyro_bias;                // gyro bias
