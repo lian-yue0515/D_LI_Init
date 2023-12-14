@@ -31,6 +31,11 @@
 #define LASER_POINT_COV     (0.001)
 #define MAXN                (720000)
 #define PUBFRAME_PERIOD     (20)
+double ACC_N = 0.01;
+double ACC_W = 1e-4;
+double GYR_N = 0.01;
+double GYR_W = 1e-4;
+Eigen::Vector3d G{0.0, 0.0, 9.8};
 
 /*** Time Log Variables ***/
 double kdtree_incremental_time = 0.0, kdtree_search_time = 0.0, kdtree_delete_time = 0.0;

@@ -57,6 +57,30 @@ const M3D Eye3d(M3D::Identity());
 const M3F Eye3f(M3F::Identity());
 const V3D Zero3d(0, 0, 0);
 const V3F Zero3f(0, 0, 0);
+
+
+extern double ACC_N, ACC_W;
+extern double GYR_N, GYR_W;
+extern Eigen::Vector3d G;
+
+class Utility
+{
+public:
+    template <typename Derived>
+    static Eigen::Quaternion<typename Derived::Scalar> deltaQ(const Eigen::MatrixBase<Derived> &theta)
+    {
+        typedef typename Derived::Scalar Scalar_t;
+
+        Eigen::Quaternion<Scalar_t> dq;
+        Eigen::Matrix<Scalar_t, 3, 1> half_theta = theta;
+        half_theta /= static_cast<Scalar_t>(2.0);
+        dq.w() = static_cast<Scalar_t>(1.0);
+        dq.x() = half_theta.x();
+        dq.y() = half_theta.y();
+        dq.z() = half_theta.z();
+        return dq;
+    }
+};
 struct GYR_{
     GYR_(){
         rot.Identity();
@@ -347,6 +371,22 @@ struct Pose {
         poseOut.pitch = pitch;
         poseOut.yaw = yaw;
         return poseOut;
+    }
+    void addtrans(const M3D rot, const V3D tran) {
+        Eigen::Affine3f transformation_matrix = Eigen::Affine3f::Identity();
+        transformation_matrix.linear() = rot.cast<float>();
+        transformation_matrix.translation() = tran.cast<float>();
+
+        Eigen::Affine3f pose = pcl::getTransformation(x, y, z, roll, pitch, yaw);
+        Eigen::Affine3f Out_a = transformation_matrix * pose;
+        float tx, ty, tz, troll, tpitch, tyaw;
+        pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, troll, tpitch, tyaw);
+        x = tx;
+        y = ty;
+        z = tz;
+        roll = troll;
+        pitch = tpitch;
+        yaw = tyaw;
     }
 };
 

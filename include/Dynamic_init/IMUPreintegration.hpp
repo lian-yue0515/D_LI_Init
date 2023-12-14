@@ -1,7 +1,7 @@
 #ifndef IMUPREINTEGRATION_HPP
 #define IMUPREINTEGRATION_HPP
 
-#include <chrono>                   
+#include <chrono>
 #include "color.h"
 #include "cstring"
 #include "common_lib.h"
