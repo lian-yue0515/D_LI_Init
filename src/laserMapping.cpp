@@ -819,10 +819,11 @@ int main(int argc, char** argv)
     string pos_log_dir = root_dir + "/Log/pos_log.txt";
     fp = fopen(pos_log_dir.c_str(),"w");
 
-    ofstream fout_pre, fout_out, fout_dbg;
+    ofstream fout_pre, fout_out, fout_true;
     fout_pre.open(DEBUG_FILE_DIR("mat_pre.txt"),ios::out);
     fout_out.open(DEBUG_FILE_DIR("mat_out.txt"),ios::out);
-    if (fout_pre && fout_out)
+    fout_true.open(DEBUG_FILE_DIR("fout_true.txt"),ios::out);
+    if (fout_pre && fout_out && fout_true)
         cout << "~~~~"<<ROOT_DIR<<" file opened" << endl;
     else
         cout << "~~~~"<<ROOT_DIR<<" doesn't exist" << endl;
@@ -848,6 +849,7 @@ int main(int argc, char** argv)
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
     bool status = ros::ok();
+    int count = 0;
     while (status)
     {
         if (flg_exit) break;
@@ -898,11 +900,13 @@ int main(int argc, char** argv)
                     pcl::io::savePCDFile(filenameyuanshi_no, *(cloudshowyuanshi_no));
                     
                 }
+                dynamic_init->solve_Rot_bias_gyro();
                 return 0;
+
             }else{
                 cout<<"oh no"<<endl;
             }
-                        
+
             p_imu->Process(Measures, kf, feats_undistort);
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
@@ -966,6 +970,9 @@ int main(int argc, char** argv)
             double solve_H_time = 0;
             kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
             state_point = kf.get_x();
+            // fout_true<<count<<" "<<"vel: "<<state_point.vel.transpose()\
+            // <<" "<<"bg: "<<state_point.bg.transpose()<<" "<<"ba: "<<state_point.ba.transpose()<<" "<<"g: "<<state_point.grav<< endl;
+            // count++;
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
             geoQuat.x = state_point.rot.coeffs()[0];
@@ -987,9 +994,8 @@ int main(int argc, char** argv)
         status = ros::ok();
         rate.sleep();
     }
-
     fout_out.close();
     fout_pre.close();
-
+    fout_true.close();
     return 0;
 }
