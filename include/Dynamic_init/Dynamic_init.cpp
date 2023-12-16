@@ -390,7 +390,7 @@ void Dynamic_init::RefineGravity(StatesGroup icp_state, Vector3d &g, VectorXd &x
             tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
             tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity() * lxly;
             tmp_A.block<3, 3>(3, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);
-            tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\ 
+            tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\
                         - frame_i->R.transpose() * dt * Matrix3d::Identity() * g0;
             //cout << "delta_v   " << frame_j->second.pre_integration->delta_v.transpose() << endl;
 
