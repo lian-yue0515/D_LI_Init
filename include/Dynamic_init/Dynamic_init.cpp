@@ -6,7 +6,7 @@ sensor_msgs::ImuConstPtr last_imu_;
 const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
 Pose pose_cur{0,0,0,0,0,0};
 Pose pose_cur_no{0,0,0,0,0,0};
-
+Pose icp_result;
 
 Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCloud<pcl::PointXYZINormal> targetKeyframeCloud)
 {
@@ -43,7 +43,7 @@ Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCl
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 5;
+    data_accum_length = 10;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
@@ -71,6 +71,10 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         last_imu_ = Initialized_data[0].imu.back();
         return 0;
         odom.push_back(pose_cur);
+        icp_result = pose_cur;
+        icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
+        CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), meas.lidar_end_time);
+        system_state.push_back(calibState);
     }
     auto v_imu = meas.imu;
     v_imu.push_front(last_imu_);
@@ -257,10 +261,10 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         }
     }
     Undistortpoint.push_back(pcl_current.makeShared());
-    Pose icp_result = doICP(*Undistortpoint.back(), *Undistortpoint[Undistortpoint.size()-2]);
-    icpodom.push_back(icp_result);
+    icpodom.push_back(doICP(*Undistortpoint.back(), *Undistortpoint[Undistortpoint.size()-2]));
     pose_cur = pose_cur.addPoses(pose_cur, icpodom.back());
     odom.push_back(pose_cur);
+    icp_result = pose_cur;
     icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
     CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     calibState.pre_integration = tmp_pre_integration;
@@ -307,13 +311,14 @@ void Dynamic_init::solve_Rot_bias_gyro() {
     b.setZero();
     for (auto frame_i = system_state.begin(); next(frame_i) != system_state.end(); frame_i++)
     {
+        auto frame_j = next(frame_i);
         MatrixXd tmp_A(3, 3);
         tmp_A.setZero();
         VectorXd tmp_b(3);
         tmp_b.setZero();
-        Eigen::Quaterniond q_ij(frame_i->R);
-        tmp_A = frame_i->pre_integration->jacobian.template block<3, 3>(3, 12);
-        tmp_b = 2 * (frame_i->pre_integration->delta_q.inverse() * q_ij).vec();
+        Eigen::Quaterniond q_ij(frame_i->R.transpose() * frame_j->R);
+        tmp_A = frame_j->pre_integration->jacobian.template block<3, 3>(3, 12);
+        tmp_b = 2 * (frame_j->pre_integration->delta_q.inverse() * q_ij).vec();
         A += tmp_A.transpose() * tmp_A;
         b += tmp_A.transpose() * tmp_b;
     }
@@ -324,10 +329,157 @@ void Dynamic_init::solve_Rot_bias_gyro() {
 
     for (auto frame_i = system_state.begin(); next(frame_i) != system_state.end( ); frame_i++)
     {
-        frame_i->pre_integration->repropagate(Vector3d::Zero(), gyro_bias);
+        auto frame_j = next(frame_i);
+        frame_j->pre_integration->repropagate(Vector3d::Zero(), gyro_bias);
     }
 }
 
+MatrixXd TangentBasis(Vector3d &g0)
+{
+    Vector3d b, c;
+    Vector3d a = g0.normalized();
+    Vector3d tmp(0, 0, 1);
+    if(a == tmp)
+        tmp << 1, 0, 0;
+    b = (tmp - a * (a.transpose() * tmp)).normalized();
+    c = a.cross(b);
+    MatrixXd bc(3, 2);
+    bc.block<3, 1>(0, 0) = b;
+    bc.block<3, 1>(0, 1) = c;
+    return bc;
+}
+
+void Dynamic_init::RefineGravity(StatesGroup icp_state, Vector3d &g, VectorXd &x)
+{
+    Vector3d g0 = g.normalized() * G.norm();
+    Vector3d lx, ly;
+    //VectorXd x;
+    int all_frame_count = system_state.size();
+    int n_state = all_frame_count * 3 + 2 + 3;
+
+    MatrixXd A{n_state, n_state};
+    A.setZero();
+    VectorXd b{n_state};
+    b.setZero();
+
+
+    for(int k = 0; k < 4; k++)
+    {
+        MatrixXd lxly(3, 2);
+        lxly = TangentBasis(g0);
+        int i = 0;
+        for (auto frame_i = system_state.begin(); next(frame_i) != system_state.end(); frame_i++, i++)
+        {
+            auto frame_j = next(frame_i);
+
+            MatrixXd  tmp_A(6, 11);
+            tmp_A.setZero();
+            VectorXd tmp_b(6);
+            tmp_b.setZero();
+
+            double dt = frame_j->pre_integration->sum_dt;
+
+            tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
+            tmp_A.block<3, 3>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity() * lxly;
+            tmp_A.block<3, 3>(0, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);     
+            tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\
+                        - icp_state.offset_T_L_I - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I)\
+                        - frame_i->R.transpose() * dt * dt / 2 * g0;
+            //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
+            tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
+            tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
+            tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity() * lxly;
+            tmp_A.block<3, 3>(3, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);
+            tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\ 
+                        - frame_i->R.transpose() * dt * Matrix3d::Identity() * g0;
+            //cout << "delta_v   " << frame_j->second.pre_integration->delta_v.transpose() << endl;
+
+            Matrix<double, 6, 6> cov_inv = Matrix<double, 6, 6>::Zero();
+            //cov.block<6, 6>(0, 0) = IMU_cov[i + 1];
+            MatrixXd r_A = tmp_A.transpose() * cov_inv * tmp_A;
+            VectorXd r_b = tmp_A.transpose() * cov_inv * tmp_b;
+
+            A.block<6, 6>(i * 3, i * 3) += r_A.topLeftCorner<6, 6>();
+            b.segment<6>(i * 3) += r_b.head<6>();
+
+            A.bottomRightCorner<5, 5>() += r_A.bottomRightCorner<5, 5>();
+            b.tail<5>() += r_b.tail<5>();
+
+            A.block<6, 5>(i * 3, n_state - 5) += r_A.topRightCorner<6, 5>();
+            A.block<5, 6>(n_state - 5, i * 3) += r_A.bottomLeftCorner<5, 6>();
+        }
+        A = A * 1000.0;
+        b = b * 1000.0;
+        x = A.ldlt().solve(b);
+            VectorXd dg = x.segment<2>(n_state - 3);
+            g0 = (g0 + lxly * dg).normalized() * G.norm();
+            //double s = x(n_state - 1);
+    }   
+    g = g0;
+}
+
+void Dynamic_init::LinearAlignment(StatesGroup icp_state, VectorXd &x){
+    int all_pose_count = system_state.size();
+    int n_state = all_pose_count * 3 + 3 + 3;
+
+    MatrixXd A{n_state, n_state};
+    A.setZero();
+    VectorXd b{n_state};
+    b.setZero();
+
+    int i = 0;
+    for (auto frame_i = system_state.begin(); next(frame_i) != system_state.end(); frame_i++, i++)
+    {
+        auto frame_j = next(frame_i);
+
+        MatrixXd  tmp_A(6, 12);
+        tmp_A.setZero();
+        VectorXd tmp_b(6);
+        tmp_b.setZero();
+
+        double dt = frame_j->pre_integration->sum_dt;
+
+        tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
+        tmp_A.block<3, 3>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity();
+        tmp_A.block<3, 3>(0, 9) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);     
+        tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\
+                    - icp_state.offset_T_L_I - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I);
+        //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
+        tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
+        tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
+        tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity();
+        tmp_A.block<3, 3>(3, 9) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);
+        tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias;
+        //cout << "delta_v   " << frame_j->second.pre_integration->delta_v.transpose() << endl;
+
+        Matrix<double, 6, 6> cov_inv = Matrix<double, 6, 6>::Zero();
+        //cov.block<6, 6>(0, 0) = IMU_cov[i + 1];
+        //MatrixXd cov_inv = cov.inverse();
+        cov_inv.setIdentity();
+
+        MatrixXd r_A = tmp_A.transpose() * cov_inv * tmp_A;
+        VectorXd r_b = tmp_A.transpose() * cov_inv * tmp_b;
+
+        A.block<6, 6>(i * 3, i * 3) += r_A.topLeftCorner<6, 6>();
+        b.segment<6>(i * 3) += r_b.head<6>();
+
+        A.bottomRightCorner<6, 6>() += r_A.bottomRightCorner<6, 6>();
+        b.tail<6>() += r_b.tail<6>();
+
+        A.block<6, 6>(i * 3, n_state - 6) += r_A.topRightCorner<6, 6>();
+        A.block<6, 6>(n_state - 6, i * 3) += r_A.bottomLeftCorner<6, 6>();
+    }
+    A = A * 1000.0;
+    b = b * 1000.0;
+    x = A.ldlt().solve(b);
+    auto g = x.segment<3>(n_state - 6);
+    auto ba = x.segment<3>(n_state - 3);
+    auto v_0 = x.segment<3>(0);
+    cout<<"size: "<<x.size()<<endl;
+    ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
+    ROS_WARN_STREAM(" ba     " <<  ba.transpose());
+    ROS_WARN_STREAM(" v_0     " <<  v_0.transpose());
+}
 
 void Dynamic_init::print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0){
     cout.setf(ios::fixed);

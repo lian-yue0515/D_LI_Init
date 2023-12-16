@@ -901,6 +901,8 @@ int main(int argc, char** argv)
                     
                 }
                 dynamic_init->solve_Rot_bias_gyro();
+                VectorXd x;
+                dynamic_init->LinearAlignment(icp_state, x);
                 return 0;
 
             }else{
