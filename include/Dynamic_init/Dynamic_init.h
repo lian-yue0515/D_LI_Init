@@ -70,7 +70,9 @@ public:
 
     void solve_Rot_bias_gyro();
     void LinearAlignment(StatesGroup icp_state, VectorXd &x);
+    void LinearAlignment_withoutba(StatesGroup icp_state, VectorXd &x);
     void RefineGravity(StatesGroup icp_state, Vector3d &g, VectorXd &x);
+    void RefineGravity_withoutba(StatesGroup icp_state, Vector3d &g, VectorXd &x);
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                             const double &move_start_time);
     bool Data_processing(MeasureGroup& meas, StatesGroup icp_state);
