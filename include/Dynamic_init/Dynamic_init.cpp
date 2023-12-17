@@ -43,7 +43,7 @@ Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCl
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 10;
+    data_accum_length = 20;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
@@ -382,20 +382,21 @@ void Dynamic_init::RefineGravity(StatesGroup icp_state, Vector3d &g, VectorXd &x
             tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
             tmp_A.block<3, 3>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity() * lxly;
             tmp_A.block<3, 3>(0, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);     
-            tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\
-                        - icp_state.offset_T_L_I - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I)\
+            tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p- icp_state.offset_T_L_I\
+                        - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I)\
                         - frame_i->R.transpose() * dt * dt / 2 * g0;
             //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
             tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
             tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
             tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity() * lxly;
-            tmp_A.block<3, 3>(3, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);
-            tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\
+            tmp_A.block<3, 3>(3, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(6, 9);
+            tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v\
                         - frame_i->R.transpose() * dt * Matrix3d::Identity() * g0;
             //cout << "delta_v   " << frame_j->second.pre_integration->delta_v.transpose() << endl;
 
             Matrix<double, 6, 6> cov_inv = Matrix<double, 6, 6>::Zero();
             //cov.block<6, 6>(0, 0) = IMU_cov[i + 1];
+            cov_inv.setIdentity();
             MatrixXd r_A = tmp_A.transpose() * cov_inv * tmp_A;
             VectorXd r_b = tmp_A.transpose() * cov_inv * tmp_b;
 
@@ -442,15 +443,14 @@ void Dynamic_init::LinearAlignment(StatesGroup icp_state, VectorXd &x){
         tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
         tmp_A.block<3, 3>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity();
         tmp_A.block<3, 3>(0, 9) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);     
-        tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias\
-                    - icp_state.offset_T_L_I - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I);
-        //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
+        tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p - icp_state.offset_T_L_I\
+                    - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I);
+        
         tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
         tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
         tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity();
-        tmp_A.block<3, 3>(3, 9) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9);
-        tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v + frame_j->pre_integration->jacobian.template block<3, 3>(3, 12) * gyro_bias;
-        //cout << "delta_v   " << frame_j->second.pre_integration->delta_v.transpose() << endl;
+        tmp_A.block<3, 3>(3, 9) = -frame_j->pre_integration->jacobian.template block<3, 3>(6, 9);
+        tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v;
 
         Matrix<double, 6, 6> cov_inv = Matrix<double, 6, 6>::Zero();
         //cov.block<6, 6>(0, 0) = IMU_cov[i + 1];
@@ -472,13 +472,20 @@ void Dynamic_init::LinearAlignment(StatesGroup icp_state, VectorXd &x){
     A = A * 1000.0;
     b = b * 1000.0;
     x = A.ldlt().solve(b);
-    auto g = x.segment<3>(n_state - 6);
+    Vector3d g = x.segment<3>(n_state - 6);
     auto ba = x.segment<3>(n_state - 3);
     auto v_0 = x.segment<3>(0);
     cout<<"size: "<<x.size()<<endl;
     ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
     ROS_WARN_STREAM(" ba     " <<  ba.transpose());
     ROS_WARN_STREAM(" v_0     " <<  v_0.transpose());
+    RefineGravity(icp_state, g, x);
+    auto ba_ = x.segment<3>(n_state - 3);
+    auto v_0_ = x.segment<3>(0);
+    cout<<"----------------------------------------------------"<<endl;
+    ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
+    ROS_WARN_STREAM(" ba     " <<  ba_.transpose());
+    ROS_WARN_STREAM(" v_0     " <<  v_0_.transpose());
 }
 
 void Dynamic_init::print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0){
