@@ -115,8 +115,6 @@ struct StatesGroup
         this->bias_g  = Zero3d;
         this->bias_a  = Zero3d;
         this->gravity = Zero3d;
-        this->cov     = MD(DIM_STATE,DIM_STATE)::Identity() * INIT_COV;
-        this->cov.block<9,9>(15,15) = MD(9,9)::Identity() * 0.00001;
 	};
 
     StatesGroup(const StatesGroup& b) {
@@ -128,7 +126,6 @@ struct StatesGroup
         this->bias_g  = b.bias_g;
         this->bias_a  = b.bias_a;
         this->gravity = b.gravity;
-        this->cov     = b.cov;
 	};
 
     StatesGroup& operator=(const StatesGroup& b)
@@ -141,7 +138,6 @@ struct StatesGroup
         this->bias_g  = b.bias_g;
         this->bias_a  = b.bias_a;
         this->gravity = b.gravity;
-        this->cov     = b.cov;
         return *this;
 	};
 
@@ -156,7 +152,6 @@ struct StatesGroup
         a.bias_g  = this->bias_g  + state_add.block<3,1>(15,0);
         a.bias_a  = this->bias_a  + state_add.block<3,1>(18,0);
         a.gravity = this->gravity + state_add.block<3,1>(21,0);
-        a.cov     = this->cov;
 		return a;
 	};
 
@@ -204,7 +199,6 @@ struct StatesGroup
     V3D bias_g;       // gyroscope bias
     V3D bias_a;       // accelerator bias
     V3D gravity;      // the estimated gravity acceleration
-    Matrix<double, DIM_STATE, DIM_STATE>  cov;     // states covariance
 };
 
 template<typename T>

@@ -1,6 +1,6 @@
 #include "Dynamic_init.h"
 
-double last_lidar_end_time_;   
+double last_lidar_end_time_ = 0;   
 V3D angvel_last;
 sensor_msgs::ImuConstPtr last_imu_;
 const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
@@ -43,7 +43,7 @@ Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCl
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 20;
+    data_accum_length = 10;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
@@ -69,12 +69,13 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         second_point = true;
         lidar_frame_count++;
         last_imu_ = Initialized_data[0].imu.back();
-        return 0;
         odom.push_back(pose_cur);
+        odom_no.push_back(pose_cur);
         icp_result = pose_cur;
         icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
-        CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), meas.lidar_end_time);
-        system_state.push_back(calibState);
+        CalibState calibState_first(icp_result.poseto_rotation(), icp_result.poseto_position(), meas.lidar_end_time);
+        system_state.push_back(calibState_first);
+        return 0;
     }
     auto v_imu = meas.imu;
     v_imu.push_front(last_imu_);
@@ -99,6 +100,8 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
                         current_cen[1] - last_cen[1], 
                     current_cen[2] - last_cen[2]);
     V3D vel_cen = - displacement/timediff;      //Velocity direction opposite to numerical calculation
+    cout<<"displacement: "<<displacement<<endl;
+    cout<<"timediff: "<<timediff<<endl;
     cout<<"velocity for "<<lidar_frame_count<<" frame: "<<vel_cen<<endl;
     if(second_point)  //Motion distortion removal for first
     {
@@ -136,7 +139,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
             double &&offs_t = tail->header.stamp.toSec() - pcl_end_time_;
             GYR_first.push_back(imu_accumulative(offs_t, angvel_avr_, R_imu_));
         }
-        last_lidar_end_time_ = pcl_end_time;
+        last_lidar_end_time_ = pcl_end_time_;
         last_imu_ = Initialized_data[0].imu.back();
 
         //for first:
@@ -216,7 +219,8 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         angular_velocity_.z() = tail->angular_velocity.z;
         if(tail->header.stamp.toSec() > pcl_end_time)
             dt = pcl_end_time - head->header.stamp.toSec();
-        tmp_pre_integration->push_back(dt, linear_acceleration_, angular_velocity_);
+
+        tmp_pre_integration->push_back(dt, linear_acceleration_ * G_m_s2, angular_velocity_);
         angvel_last = angvel_avr;
         double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;
         GYR_pose.push_back(imu_accumulative(offs_t, angvel_last, R_imu));
@@ -226,7 +230,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
     dt = note * (pcl_end_time - imu_end_time);
     icp_state.vel_end = vel_cen;
     icp_state.rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);
-    icp_state.pos_end = pos_imu + vel_cen*(pcl_end_time - pcl_beg_time);
+    icp_state.pos_end = pos_imu + vel_cen * (pcl_end_time - pcl_beg_time);
 
     last_imu_ = meas.imu.back();
     last_lidar_end_time_ = pcl_end_time;
@@ -260,6 +264,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
             if (it_pcl == pcl_current.points.begin()) break;
         }
     }
+
     Undistortpoint.push_back(pcl_current.makeShared());
     icpodom.push_back(doICP(*Undistortpoint.back(), *Undistortpoint[Undistortpoint.size()-2]));
     pose_cur = pose_cur.addPoses(pose_cur, icpodom.back());
@@ -268,6 +273,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
     icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
     CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     calibState.pre_integration = tmp_pre_integration;
+    cout<<"system_state size: "<<system_state.size()<<endl;
     system_state.push_back(calibState);
     icpodom_no.push_back(doICP(*Initialized_data.back().lidar, *Initialized_data[Initialized_data.size()-2].lidar));
     pose_cur_no = pose_cur_no.addPoses(pose_cur_no, icpodom_no.back());
@@ -380,7 +386,7 @@ void Dynamic_init::RefineGravity(StatesGroup icp_state, Vector3d &g, VectorXd &x
             double dt = frame_j->pre_integration->sum_dt;
 
             tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
-            tmp_A.block<3, 3>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity() * lxly;
+            tmp_A.block<3, 2>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity() * lxly;
             tmp_A.block<3, 3>(0, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(0, 9) / 100.0;     
             tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p- icp_state.offset_T_L_I\
                         - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I)\
@@ -388,7 +394,7 @@ void Dynamic_init::RefineGravity(StatesGroup icp_state, Vector3d &g, VectorXd &x
             //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
             tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
             tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
-            tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity() * lxly;
+            tmp_A.block<3, 2>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity() * lxly;
             tmp_A.block<3, 3>(3, 8) = -frame_j->pre_integration->jacobian.template block<3, 3>(6, 9);
             tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v\
                         - frame_i->R.transpose() * dt * Matrix3d::Identity() * g0;
@@ -480,11 +486,12 @@ void Dynamic_init::LinearAlignment(StatesGroup icp_state, VectorXd &x){
     ROS_WARN_STREAM(" ba     " <<  ba.transpose());
     ROS_WARN_STREAM(" v_0     " <<  v_0.transpose());
     RefineGravity(icp_state, g, x);
-    auto ba_ = x.segment<3>(n_state - 3) / 100.0;
+    auto ba_ = x.segment<3>(n_state - 4) / 100.0;
+    cout<<"size: "<<x.size()<<endl;
     auto v_0_ = x.segment<3>(0);
     cout<<"----------------------------------------------------"<<endl;
     ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
-    ROS_WARN_STREAM(" ba     " <<  ba_.transpose());
+    ROS_WARN_STREAM(" ba     " <<  ba.transpose());
     ROS_WARN_STREAM(" v_0     " <<  v_0_.transpose());
 }
 
@@ -520,14 +527,14 @@ void Dynamic_init::RefineGravity_withoutba(StatesGroup icp_state, Vector3d &g, V
             double dt = frame_j->pre_integration->sum_dt;
 
             tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
-            tmp_A.block<3, 3>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity() * lxly;   
+            tmp_A.block<3, 2>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity() * lxly;   
             tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p- icp_state.offset_T_L_I\
                         - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I)\
                         - frame_i->R.transpose() * dt * dt / 2 * g0;
             //cout << "delta_p   " << frame_j->second.pre_integration->delta_p.transpose() << endl;
             tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
             tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
-            tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity() * lxly;
+            tmp_A.block<3, 2>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity() * lxly;
             tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v\
                         - frame_i->R.transpose() * dt * Matrix3d::Identity() * g0;
             //cout << "delta_v   " << frame_j->second.pre_integration->delta_v.transpose() << endl;
@@ -577,17 +584,16 @@ void Dynamic_init::LinearAlignment_withoutba(StatesGroup icp_state, VectorXd &x)
         tmp_b.setZero();
 
         double dt = frame_j->pre_integration->sum_dt;
-
         tmp_A.block<3, 3>(0, 0) = -dt * Matrix3d::Identity();
         tmp_A.block<3, 3>(0, 6) = frame_i->R.transpose() * dt * dt / 2 * Matrix3d::Identity();
         tmp_b.block<3, 1>(0, 0) = frame_j->pre_integration->delta_p - icp_state.offset_T_L_I\
                     - frame_i->R.transpose() * (frame_j->T - frame_i->T - frame_j->R * icp_state.offset_T_L_I);
-        
+        cout << "delta_p   " << frame_j->pre_integration->delta_p.transpose() << endl;
         tmp_A.block<3, 3>(3, 0) = -Matrix3d::Identity();
         tmp_A.block<3, 3>(3, 3) = frame_i->R.transpose() * frame_j->R;
         tmp_A.block<3, 3>(3, 6) = frame_i->R.transpose() * dt * Matrix3d::Identity();
         tmp_b.block<3, 1>(3, 0) = frame_j->pre_integration->delta_v;
-
+        cout << "delta_v   " << frame_j->pre_integration->delta_v.transpose() << endl;
         Matrix<double, 6, 6> cov_inv = Matrix<double, 6, 6>::Zero();
         //cov.block<6, 6>(0, 0) = IMU_cov[i + 1];
         //MatrixXd cov_inv = cov.inverse();
@@ -610,6 +616,9 @@ void Dynamic_init::LinearAlignment_withoutba(StatesGroup icp_state, VectorXd &x)
     x = A.ldlt().solve(b);
     Vector3d g = x.segment<3>(n_state - 3);
     auto v_0 = x.segment<3>(0);
+    std::ofstream outFile("/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/Log/A.txt");
+    outFile<<A;
+    outFile.close();
     cout<<"size: "<<x.size()<<endl;
     ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
     ROS_WARN_STREAM(" v_0     " <<  v_0.transpose());

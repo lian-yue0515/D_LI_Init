@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(lidar_dynamic_init)
 
-SET(CMAKE_BUILD_TYPE "Release")
+SET(CMAKE_BUILD_TYPE "DEBUG")
 
 ADD_COMPILE_OPTIONS(-std=c++14 )
 set( CMAKE_CXX_FLAGS "-std=c++17 -O3" )
