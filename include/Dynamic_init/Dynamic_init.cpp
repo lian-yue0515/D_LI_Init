@@ -95,7 +95,8 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
     pcl::compute3DCentroid(pcl_last, last_cen);	
     Eigen::Vector4f current_cen;
     float timediff = pcl_end_time - pcl_beg_time;			
-    pcl::compute3DCentroid(pcl_current, current_cen);	
+    pcl::compute3DCentroid(pcl_current, current_cen);
+    cout<<"zhixin: "<<current_cen<<endl;
     V3D displacement = V3D(current_cen[0] - last_cen[0], 
                         current_cen[1] - last_cen[1], 
                     current_cen[2] - last_cen[2]);
@@ -220,7 +221,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         if(tail->header.stamp.toSec() > pcl_end_time)
             dt = pcl_end_time - head->header.stamp.toSec();
 
-        tmp_pre_integration->push_back(dt, linear_acceleration_ * G_m_s2, angular_velocity_);
+        tmp_pre_integration->push_back(dt, linear_acceleration_ / mean_acc_norm * G_m_s2, angular_velocity_);
         angvel_last = angvel_avr;
         double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;
         GYR_pose.push_back(imu_accumulative(offs_t, angvel_last, R_imu));

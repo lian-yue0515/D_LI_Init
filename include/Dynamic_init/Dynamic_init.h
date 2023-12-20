@@ -52,6 +52,7 @@ public:
     int data_accum_length;
     int lidar_frame_count;
     bool first_point, second_point;
+    double mean_acc_norm = 1;
     std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr> Undistortpoint;
     vector<GYR_> GYR_first;
     vector<GYR_> GYR_pose;
