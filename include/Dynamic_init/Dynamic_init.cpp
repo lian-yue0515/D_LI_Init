@@ -60,7 +60,7 @@ void Dynamic_init::clear() {
     cout << "\x1B[2J\x1B[H";
 }
 
-bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//, state_ikfom state
+bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)//, state_ikfom state
 {
     Initialized_data.push_back(meas);
     if(first_point){
@@ -76,6 +76,8 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
         system_state.push_back(calibState_first);
         return 0;
     }
+    cout<<"初始P： "<<icp_state.pos_end<<endl;
+    cout<<"初始R： "<<icp_state.rot_end<<endl;
     auto v_imu = meas.imu;
     v_imu.push_front(last_imu_);
     auto pcl_current = *(meas.lidar);
@@ -158,12 +160,11 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
                 /* Transform to the 'scan-end' IMU frame（I_k frame)*/
                 M3D R_i(R * Exp(ANGVEL, dt));
                 V3D p_in(it_pcl->x, it_pcl->y, it_pcl->z);
-                V3D P_compensate = icp_state.offset_R_L_I.transpose() * (icp_state.rot_end.transpose() * (r.transpose() * R_i * (icp_state.offset_R_L_I * p_in + icp_state.offset_T_L_I) - icp_state.pos_end) - icp_state.offset_T_L_I);
-
+                M3D R_jk = icp_state.offset_R_L_I.transpose() * icp_state.rot_end.transpose() * r.transpose() * R_i * icp_state.offset_R_L_I;
                 dt_j= pcl_end_offset_time - it_pcl->curvature/double(1000);
                 V3D p_jk;
                 p_jk = - (icp_state.rot_end).transpose() * vel_cen * dt_j;
-                P_compensate = P_compensate + p_jk;
+                V3D P_compensate = R_jk * p_in + p_jk;
                 
                 /// save Undistorted points
                 it_pcl->x = P_compensate(0);
@@ -233,7 +234,8 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
     icp_state.vel_end = vel_cen;
     icp_state.rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);
     icp_state.pos_end = pos_imu + vel_cen * (pcl_end_time - pcl_beg_time);
-
+    cout<<"预测P： "<<icp_state.pos_end<<endl;
+    cout<<"预测R： "<<icp_state.rot_end<<endl;
     last_imu_ = meas.imu.back();
     last_lidar_end_time_ = pcl_end_time;
     double dt_j = 0.0;
@@ -250,14 +252,12 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
             /* Transform to the 'scan-end' IMU frame（I_k frame)*/
             M3D R_i(R_imu * Exp(angvel_avr, dt));
             V3D p_in(it_pcl->x, it_pcl->y, it_pcl->z);
-            V3D P_compensate = icp_state.offset_R_L_I.transpose() * (icp_state.rot_end.transpose() * \
-                (R_i * (icp_state.offset_R_L_I * p_in + icp_state.offset_T_L_I) - icp_state.pos_end) - \
-                icp_state.offset_T_L_I);
+            M3D R_jk = icp_state.offset_R_L_I.transpose() * icp_state.rot_end.transpose() * R_i * icp_state.offset_R_L_I;
             
             dt_j= pcl_end_offset_time - it_pcl->curvature/double(1000);
             V3D p_jk;
             p_jk = - icp_state.rot_end.transpose() * icp_state.vel_end * dt_j;
-            P_compensate = P_compensate + p_jk;
+            V3D P_compensate = R_jk * p_in + p_jk;
             
             /// save Undistorted points
             it_pcl->x = P_compensate(0);
@@ -272,21 +272,24 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup icp_state)//,
     pose_cur = pose_cur.addPoses(pose_cur, icpodom.back());
     odom.push_back(pose_cur);
 
-    // icp_result = pose_cur;
-    // icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
-    // CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
-    // calibState.pre_integration = tmp_pre_integration;
-    // system_state.push_back(calibState);
-    icpodom_no.push_back(doICP(*Initialized_data.back().lidar, *Initialized_data[Initialized_data.size()-2].lidar));
-    pose_cur_no = pose_cur_no.addPoses(pose_cur_no, icpodom_no.back());
-    odom_no.push_back(pose_cur_no);
-    icp_result = pose_cur_no;
+    icp_result = pose_cur;
     icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
     CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     calibState.pre_integration = tmp_pre_integration;
     system_state.push_back(calibState);
-    // icp_state.rot_end = pose_cur_no.poseto_rotation();
-    // icp_state.pos_end = pose_cur_no.poseto_position();
+    icpodom_no.push_back(doICP(*Initialized_data.back().lidar, *Initialized_data[Initialized_data.size()-2].lidar));
+    pose_cur_no = pose_cur_no.addPoses(pose_cur_no, icpodom_no.back());
+    odom_no.push_back(pose_cur_no);
+    // icp_result = pose_cur_no;
+    // icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
+    // CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
+    // calibState.pre_integration = tmp_pre_integration;
+    // system_state.push_back(calibState);
+    icp_state.rot_end = pose_cur.poseto_rotation();
+    icp_state.pos_end = pose_cur.poseto_position();
+    cout<<"观测P： "<<icp_state.pos_end<<endl;
+    cout<<"观测R： "<<icp_state.rot_end<<endl;
+    cout<<"-----------------------------"<<endl<<endl;
     if (lidar_frame_count < data_accum_length)
     {
         lidar_frame_count++;

@@ -768,7 +768,6 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
         ekfom_data.h(i) = -norm_p.intensity;
     }
 }
-
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "laserinit");
@@ -931,109 +930,103 @@ int main(int argc, char** argv)
                     // dynamic_init->LinearAlignment(icp_state, x);
                     VectorXd x_;
                     dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+                    
+                    return 0;
                 }else{
                     continue;
                 }
             }
-            if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
-                shared_ptr<ImuProcess> p_init_imu(new ImuProcess());
-                p_init_imu->set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
-                p_init_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
-                p_init_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
-                p_init_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
-                p_init_imu->set_acc_bias_cov(V3D(b_acc_cov, b_acc_cov, b_acc_cov));
-                // p_init_imu->change_imu_need(false);
-                esekfom::esekf<state_ikfom, 12, input_ikfom> kf_init;
-                kf_init.init_dyn_share(get_f, df_dx, df_dw, h_share_model, NUM_MAX_ITERATIONS, epsi);
-                state_ikfom state_init = kf_init.get_x();
+            // if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
+            //     shared_ptr<ImuProcess> p_init_imu(new ImuProcess());
+            //     p_init_imu->set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
+            //     p_init_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
+            //     p_init_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
+            //     p_init_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
+            //     p_init_imu->set_acc_bias_cov(V3D(b_acc_cov, b_acc_cov, b_acc_cov));
+            //     p_init_imu->change_imu_need(false);
+            //     esekfom::esekf<state_ikfom, 12, input_ikfom> kf_init;
+            //     kf_init.init_dyn_share(get_f, df_dx, df_dw, h_share_model, NUM_MAX_ITERATIONS, epsi);
+            //     state_ikfom state_init = kf_init.get_x();
                 // state_init.bg = dynamic_init->get_gyro_bias();
                 // state_init.grav = S2(dynamic_init->get_Grav_L0());
                 // state_init.vel = dynamic_init->get_V_0();
                 // kf_init.change_x(state_init);
-
-                esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf_init.get_P();
-                init_P.setIdentity();
-                init_P(6, 6) = init_P(7, 7) = init_P(8, 8) = 0.00001;
-                init_P(9, 9) = init_P(10, 10) = init_P(11, 11) = 0.00001;
-                init_P(15, 15) = init_P(16, 16) = init_P(17, 17) = 0.0001;
-                init_P(18, 18) = init_P(19, 19) = init_P(20, 20) = 0.001;
-                init_P(21, 21) = init_P(22, 22) = 0.00001;
-                kf_init.change_P(init_P);
-                for (auto i = 0; i < dynamic_init->data_accum_length-1; i++)
-                {
-                    p_init_imu->Process(dynamic_init->Initialized_data[i], kf_init, feats_undistort);
-                    state_init = kf_init.get_x();
-                    pos_lid = state_init.pos + state_init.rot * state_init.offset_T_L_I;
-                    flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME ? \
-                                    false : true;
-                    lasermap_fov_segment();
-
-                    downSizeFilterSurf.setInputCloud(feats_undistort);
-                    downSizeFilterSurf.filter(*feats_down_body);
-                    feats_down_size = feats_down_body->points.size();
-                    if(ikdtree_init.Root_Node == nullptr)
-                    {
-                        if(feats_down_size > 5)
-                        {
-                            ikdtree_init.set_downsample_param(filter_size_map_min);
-                            feats_down_world->resize(feats_down_size);
-                            for(int i = 0; i < feats_down_size; i++)
-                            {
-                                pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
-                            }
-                            ikdtree_init.Build(feats_down_world->points);
-                        }
-                        continue;
-                    }
-                    int featsFromMapNum = ikdtree_init.validnum();
-                    kdtree_size_st = ikdtree_init.size();
-                    if (feats_down_size < 5)
-                    {
-                        ROS_WARN("No point, skip this scan!\n");
-                        continue;
-                    }
-                    normvec->resize(feats_down_size);
-                    feats_down_world->resize(feats_down_size);
-                
-                    pointSearchInd_surf.resize(feats_down_size);
-                    Nearest_Points.resize(feats_down_size);
-                    int  rematch_num = 0;
-                    bool nearest_search_en = true; //
-
-                    /*** iterated state estimation ***/
-
-                    double solve_H_time = 0;
-                    kf_init.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
-                    state_init = kf_init.get_x();
-
-                    pos_lid = state_init.pos + state_init.rot * state_init.offset_T_L_I;
-                    geoQuat.x = state_init.rot.coeffs()[0];
-                    geoQuat.y = state_init.rot.coeffs()[1];
-                    geoQuat.z = state_init.rot.coeffs()[2];
-                    geoQuat.w = state_init.rot.coeffs()[3];
-                    /*** add the feature points to map kdtree ***/
-                    map_incremental();
-                    tf2::Quaternion quat(geoQuat.x, geoQuat.y, geoQuat.z, geoQuat.w);
-                    tf2::Matrix3x3 mat(quat);
-                    double roll, pitch, yaw;
-                    mat.getRPY(roll, pitch, yaw);
-                    Pose pose_cur;
-                    pose_cur.x = state_init.pos(0);
-                    pose_cur.y = state_init.pos(1);
-                    pose_cur.z = state_init.pos(2);
-                    pose_cur.roll = roll;
-                    pose_cur.pitch = pitch;
-                    pose_cur.yaw = yaw;
-                    dynamic_init->system_state[i].R = pose_cur.poseto_rotation();
-                    dynamic_init->system_state[i].T = pose_cur.poseto_position();
-                }
-                dynamic_init->solve_Rot_bias_gyro();
-                // VectorXd x;
-                // dynamic_init->LinearAlignment(icp_state, x);
-                VectorXd x_;
-                dynamic_init->LinearAlignment_withoutba(icp_state, x_);
-                return 0;
-            }
+            //     esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf_init.get_P();
+            //     init_P.setIdentity();
+            //     init_P(6, 6) = init_P(7, 7) = init_P(8, 8) = 0.00001;
+            //     init_P(9, 9) = init_P(10, 10) = init_P(11, 11) = 0.00001;
+            //     init_P(15, 15) = init_P(16, 16) = init_P(17, 17) = 0.0001;
+            //     init_P(18, 18) = init_P(19, 19) = init_P(20, 20) = 0.001;
+            //     init_P(21, 21) = init_P(22, 22) = 0.00001;
+            //     kf_init.change_P(init_P);
+            //     for (auto i = 0; i < dynamic_init->data_accum_length-1; i++)
+            //     {
+            //         p_init_imu->Process(dynamic_init->Initialized_data[i], kf_init, feats_undistort);
+            //         state_init = kf_init.get_x();
+            //         pos_lid = state_init.pos + state_init.rot * state_init.offset_T_L_I;
+            //         flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME ? \
+            //                         false : true;
+            //         lasermap_fov_segment();
+            //         downSizeFilterSurf.setInputCloud(feats_undistort);
+            //         downSizeFilterSurf.filter(*feats_down_body);
+            //         feats_down_size = feats_down_body->points.size();
+            //         if(ikdtree_init.Root_Node == nullptr)
+            //         {
+            //             if(feats_down_size > 5)
+            //             {
+            //                 ikdtree_init.set_downsample_param(filter_size_map_min);
+            //                 feats_down_world->resize(feats_down_size);
+            //                 for(int i = 0; i < feats_down_size; i++)
+            //                 {
+            //                     pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
+            //                 }
+            //                 ikdtree_init.Build(feats_down_world->points);
+            //             }
+            //             continue;
+            //         }
+            //         int featsFromMapNum = ikdtree_init.validnum();
+            //         kdtree_size_st = ikdtree_init.size();
+            //         if (feats_down_size < 5)
+            //         {
+            //             ROS_WARN("No point, skip this scan!\n");
+            //             continue;
+            //         }
+            //         normvec->resize(feats_down_size);
+            //         feats_down_world->resize(feats_down_size);
+            //         pointSearchInd_surf.resize(feats_down_size);
+            //         Nearest_Points.resize(feats_down_size);
+            //         int  rematch_num = 0;
+            //         bool nearest_search_en = true; //
+            //         /*** iterated state estimation ***/
+            //         double solve_H_time = 0;
+            //         kf_init.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
+            //         state_init = kf_init.get_x();
+            //         pos_lid = state_init.pos + state_init.rot * state_init.offset_T_L_I;
+            //         geoQuat.x = state_init.rot.coeffs()[0];
+            //         geoQuat.y = state_init.rot.coeffs()[1];
+            //         geoQuat.z = state_init.rot.coeffs()[2];
+            //         geoQuat.w = state_init.rot.coeffs()[3];
+            //         /*** add the feature points to map kdtree ***/
+            //         map_incremental();
+            //         tf2::Quaternion quat(geoQuat.x, geoQuat.y, geoQuat.z, geoQuat.w);
+            //         tf2::Matrix3x3 mat(quat);
+            //         double roll, pitch, yaw;
+            //         mat.getRPY(roll, pitch, yaw);
+            //         Pose pose_cur;
+            //         pose_cur.x = state_init.pos(0);
+            //         pose_cur.y = state_init.pos(1);
+            //         pose_cur.z = state_init.pos(2);
+            //         pose_cur.roll = roll;
+            //         pose_cur.pitch = pitch;
+            //         pose_cur.yaw = yaw;
+            //         dynamic_init->system_state[i].R = pose_cur.poseto_rotation();
+            //         dynamic_init->system_state[i].T = pose_cur.poseto_position();
+            //     }
+            //     dynamic_init->solve_Rot_bias_gyro();
+            //     VectorXd x_;
+            //     dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+            //     return 0;
+            // }
             p_imu->Process(Measures, kf, feats_undistort);
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
@@ -1098,7 +1091,7 @@ int main(int argc, char** argv)
             state_point = kf.get_x();
             // fout_true<<count<<" "<<"vel: "<<state_point.vel.transpose()\
             // <<" "<<"bg: "<<state_point.bg.transpose()<<" "<<"ba: "<<state_point.ba.transpose()<<" "<<"g: "<<state_point.grav<< endl;
-            // count++;
+            count++;
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
             geoQuat.x = state_point.rot.coeffs()[0];

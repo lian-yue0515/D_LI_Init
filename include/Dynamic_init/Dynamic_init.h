@@ -65,7 +65,7 @@ public:
     Pose pose_cur{0,0,0,0,0,0};
     V3D acc_0;
     V3D gyr_0;
-    bool dynamic_init_fished = false;
+    bool dynamic_init_fished = true;
     bool Data_processing_fished = false;
     deque<CalibState> system_state;
 
@@ -82,7 +82,7 @@ public:
     void RefineGravity_withoutba(StatesGroup icp_state, Vector3d &g, VectorXd &x);
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                             const double &move_start_time);
-    bool Data_processing(MeasureGroup& meas, StatesGroup icp_state);
+    bool Data_processing(MeasureGroup& meas, StatesGroup &icp_state);
     void Data_propagate();
     void clear();
     void print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0);
