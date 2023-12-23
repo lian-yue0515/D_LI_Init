@@ -62,6 +62,12 @@ public:
     vector<Pose> odom_no;
     vector<MeasureGroup> Initialized_data;
     IntegrationBase *tmp_pre_integration;
+    Pose pose_cur{0,0,0,0,0,0};
+    V3D acc_0;
+    V3D gyr_0;
+    bool dynamic_init_fished = false;
+    bool Data_processing_fished = false;
+    deque<CalibState> system_state;
 
 
     Dynamic_init();
@@ -93,18 +99,8 @@ public:
     inline V3D get_V_0() {
     return V_0;
     }
-    inline void system_state_clear() {
-        system_state.clear();
-    }
-    void system_state_pop_front(){
-        system_state.pop_front();
-    }
-    int system_state_size(){
-        return system_state.size();
-    }
 
 private:
-    deque<CalibState> system_state;
     /// Parameters needed to be calibrateds
     V3D Grav_L0;                  // Gravity vector in the initial Lidar frame L_0
     V3D gyro_bias;                // gyro bias
