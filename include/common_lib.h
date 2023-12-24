@@ -366,13 +366,29 @@ struct Pose {
         poseOut.yaw = yaw;
         return poseOut;
     }
-    void addtrans(const M3D rot, const V3D tran) {
+    void addtrans_left(const M3D rot, const V3D tran) {
         Eigen::Affine3f transformation_matrix = Eigen::Affine3f::Identity();
         transformation_matrix.linear() = rot.cast<float>();
         transformation_matrix.translation() = tran.cast<float>();
 
         Eigen::Affine3f pose = pcl::getTransformation(x, y, z, roll, pitch, yaw);
         Eigen::Affine3f Out_a = transformation_matrix * pose;
+        float tx, ty, tz, troll, tpitch, tyaw;
+        pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, troll, tpitch, tyaw);
+        x = tx;
+        y = ty;
+        z = tz;
+        roll = troll;
+        pitch = tpitch;
+        yaw = tyaw;
+    }
+    void addtrans_right(const M3D rot, const V3D tran) {
+        Eigen::Affine3f transformation_matrix = Eigen::Affine3f::Identity();
+        transformation_matrix.linear() = rot.cast<float>();
+        transformation_matrix.translation() = tran.cast<float>();
+
+        Eigen::Affine3f pose = pcl::getTransformation(x, y, z, roll, pitch, yaw);
+        Eigen::Affine3f Out_a =  pose * transformation_matrix;
         float tx, ty, tz, troll, tpitch, tyaw;
         pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, troll, tpitch, tyaw);
         x = tx;

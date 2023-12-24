@@ -7,7 +7,24 @@ const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature)
 Pose pose_cur_no{0,0,0,0,0,0};
 Pose icp_result;
 
-Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCloud<pcl::PointXYZINormal> targetKeyframeCloud)
+Pose trans2pose(const M3D rot, const V3D tran) {
+    Eigen::Affine3f transformation_matrix = Eigen::Affine3f::Identity();
+    transformation_matrix.linear() = rot.cast<float>();
+    transformation_matrix.translation() = tran.cast<float>();
+
+    float tx, ty, tz, troll, tpitch, tyaw;
+    pcl::getTranslationAndEulerAngles(transformation_matrix, tx, ty, tz, troll, tpitch, tyaw);
+    Pose pose;
+    pose.x = tx;
+    pose.y = ty;
+    pose.z = tz;
+    pose.roll = troll;
+    pose.pitch = tpitch;
+    pose.yaw = tyaw;
+    return pose;
+}
+
+Pose doICP(pcl::PointCloud<PointType> cureKeyframeCloud, pcl::PointCloud<PointType> targetKeyframeCloud)
 {
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr sourcePtr = cureKeyframeCloud.makeShared();
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr targetPtr = targetKeyframeCloud.makeShared();
@@ -38,6 +55,29 @@ Pose doICP(pcl::PointCloud<pcl::PointXYZINormal> cureKeyframeCloud, pcl::PointCl
     return Pose{x, y, z, roll, pitch, yaw};
 
 } 
+
+pcl::PointCloud<PointType>::Ptr Pointscloud_trans(const pcl::PointCloud<PointType>::Ptr cloudIn, const Pose &tf)
+{
+    pcl::PointCloud<PointType>::Ptr cloudOut(new pcl::PointCloud<PointType>());
+
+    int cloudSize = cloudIn->size();
+    cloudOut->resize(cloudSize);
+
+    Eigen::Affine3f transCur = pcl::getTransformation(tf.x, tf.y, tf.z, tf.roll, tf.pitch, tf.yaw);
+
+    int numberOfCores = 16;
+#pragma omp parallel for num_threads(numberOfCores)
+    for (int i = 0; i < cloudSize; ++i)
+    {
+        const auto &pointFrom = cloudIn->points[i];
+        cloudOut->points[i].x = transCur(0, 0) * pointFrom.x + transCur(0, 1) * pointFrom.y + transCur(0, 2) * pointFrom.z + transCur(0, 3);
+        cloudOut->points[i].y = transCur(1, 0) * pointFrom.x + transCur(1, 1) * pointFrom.y + transCur(1, 2) * pointFrom.z + transCur(1, 3);
+        cloudOut->points[i].z = transCur(2, 0) * pointFrom.x + transCur(2, 1) * pointFrom.y + transCur(2, 2) * pointFrom.z + transCur(2, 3);
+        cloudOut->points[i].intensity = pointFrom.intensity;
+    }
+
+    return cloudOut;
+}
 
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
@@ -71,13 +111,11 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)//
         odom.push_back(pose_cur);
         odom_no.push_back(pose_cur);
         icp_result = pose_cur;
-        icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
+        icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
         CalibState calibState_first(icp_result.poseto_rotation(), icp_result.poseto_position(), meas.lidar_end_time);
         system_state.push_back(calibState_first);
         return 0;
     }
-    cout<<"初始P： "<<icp_state.pos_end<<endl;
-    cout<<"初始R： "<<icp_state.rot_end<<endl;
     auto v_imu = meas.imu;
     v_imu.push_front(last_imu_);
     auto pcl_current = *(meas.lidar);
@@ -179,6 +217,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)//
 
     V3D angvel_avr, pos_imu(icp_state.pos_end);
     M3D R_imu(icp_state.rot_end);
+    Pose pose_initial = trans2pose(icp_state.rot_end, icp_state.pos_end);
     /*** Initialize IMU pose ***/
     GYR_pose.clear();
     GYR_pose.push_back(imu_accumulative(0.0, angvel_last, R_imu));
@@ -234,8 +273,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)//
     icp_state.vel_end = vel_cen;
     icp_state.rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);
     icp_state.pos_end = pos_imu + vel_cen * (pcl_end_time - pcl_beg_time);
-    cout<<"预测P： "<<icp_state.pos_end<<endl;
-    cout<<"预测R： "<<icp_state.rot_end<<endl;
+    Pose pose_prediction = trans2pose(icp_state.rot_end, icp_state.pos_end);
     last_imu_ = meas.imu.back();
     last_lidar_end_time_ = pcl_end_time;
     double dt_j = 0.0;
@@ -268,28 +306,23 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)//
     }
 
     Undistortpoint.push_back(pcl_current.makeShared());
-    icpodom.push_back(doICP(*Undistortpoint.back(), *Undistortpoint[Undistortpoint.size()-2]));
-    pose_cur = pose_cur.addPoses(pose_cur, icpodom.back());
+    Pose pose_diff = pose_prediction.diffpose(pose_initial);
+    pcl::PointCloud<PointType>::Ptr Pointscloud_near = Pointscloud_trans(Undistortpoint.back(), pose_diff);
+    Pose icp_trans = pose_diff.addPoses(pose_diff, doICP(*Pointscloud_near, *Undistortpoint[Undistortpoint.size()-2]));
+
+    pose_cur = pose_cur.addPoses(pose_cur, icp_trans);
     odom.push_back(pose_cur);
 
     icp_result = pose_cur;
-    icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
+    icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
     CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     calibState.pre_integration = tmp_pre_integration;
     system_state.push_back(calibState);
     icpodom_no.push_back(doICP(*Initialized_data.back().lidar, *Initialized_data[Initialized_data.size()-2].lidar));
     pose_cur_no = pose_cur_no.addPoses(pose_cur_no, icpodom_no.back());
     odom_no.push_back(pose_cur_no);
-    // icp_result = pose_cur_no;
-    // icp_result.addtrans(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
-    // CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
-    // calibState.pre_integration = tmp_pre_integration;
-    // system_state.push_back(calibState);
     icp_state.rot_end = pose_cur.poseto_rotation();
     icp_state.pos_end = pose_cur.poseto_position();
-    cout<<"观测P： "<<icp_state.pos_end<<endl;
-    cout<<"观测R： "<<icp_state.rot_end<<endl;
-    cout<<"-----------------------------"<<endl<<endl;
     if (lidar_frame_count < data_accum_length)
     {
         lidar_frame_count++;
