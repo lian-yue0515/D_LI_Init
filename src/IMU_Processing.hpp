@@ -50,9 +50,6 @@ public:
     void set_acc_bias_cov(const V3D &b_a);
     Eigen::Matrix<double, 12, 12> Q;
     void Process(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZI::Ptr pcl_un_);
-    void Process_dynamic_init(const MeasureGroup &meas,
-                                esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state,
-                                PointCloudXYZI::Ptr cur_pcl_un_);
     ofstream fout_imu;
     V3D cov_acc;
     V3D cov_gyr;
@@ -67,7 +64,6 @@ public:
 
 private:
     void IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N);
-    void IMU_init_dynamic(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N);
     void UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZI &pcl_in_out);
     PointCloudXYZI::Ptr cur_pcl_un_;
     sensor_msgs::ImuConstPtr last_imu_;
@@ -219,12 +215,7 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 
     last_imu_ = meas.imu.back();
 }
 
-void ImuProcess::IMU_init_dynamic(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N)
-{
 
-
-    last_imu_ = meas.imu.back();
-}
 
 
 void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZI &pcl_out)
@@ -390,19 +381,3 @@ void ImuProcess::Process(const MeasureGroup &meas,
     UndistortPcl(meas, kf_state, *cur_pcl_un_);
 }
 
-void ImuProcess::Process_dynamic_init(const MeasureGroup &meas,
-                                esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state,
-                                PointCloudXYZI::Ptr cur_pcl_un_)
-{
-
-    if (imu_need_init_)
-    {
-
-        imu_need_init_ = false;
-        IMU_init_dynamic(meas, kf_state, init_iter_num);
-        last_imu_ = meas.imu.back();
-
-        return;
-    }
-    UndistortPcl(meas, kf_state, *cur_pcl_un_);
-}

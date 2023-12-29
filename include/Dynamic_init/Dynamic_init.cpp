@@ -100,7 +100,7 @@ void Dynamic_init::clear() {
     cout << "\x1B[2J\x1B[H";
 }
 
-bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)//, state_ikfom state
+bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)
 {
     Initialized_data.push_back(meas);
     if(first_point){
