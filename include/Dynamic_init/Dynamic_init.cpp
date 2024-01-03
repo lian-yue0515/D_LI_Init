@@ -107,11 +107,11 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)
         first_point = false;
         second_point = true;
         lidar_frame_count++;
-        last_imu_ = Initialized_data[0].imu.back();
+        last_imu_ = meas.imu.back();
         odom.push_back(pose_cur);
         odom_no.push_back(pose_cur);
         icp_result = pose_cur;
-        icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
+        // icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
         CalibState calibState_first(icp_result.poseto_rotation(), icp_result.poseto_position(), meas.lidar_end_time);
         system_state.push_back(calibState_first);
         return 0;
@@ -539,8 +539,6 @@ void Dynamic_init::LinearAlignment(StatesGroup icp_state, VectorXd &x){
     ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
     ROS_WARN_STREAM(" ba     " <<  ba.transpose());
     ROS_WARN_STREAM(" v_0     " <<  v_0_.transpose());
-    Grav_L0 = g;
-    V_0 = v_0_;
 }
 
 
@@ -675,6 +673,8 @@ void Dynamic_init::LinearAlignment_withoutba(StatesGroup icp_state, VectorXd &x)
     cout<<"----------------------------------------------------"<<endl;
     ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
     ROS_WARN_STREAM(" v_0     " <<  v_0_.transpose());
+    Grav_L0 = g;
+    V_0 = v_0_;
 }
 void Dynamic_init::print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0){
     cout.setf(ios::fixed);

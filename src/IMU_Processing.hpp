@@ -57,7 +57,8 @@ public:
     V3D cov_gyr_scale;
     V3D cov_bias_gyr;
     V3D cov_bias_acc;
-    double first_lidar_time;   
+    double first_lidar_time; 
+    bool Dynamic_init = true;  
     void change_imu_need(bool a){
         imu_need_init_ = a;
     }        
@@ -232,7 +233,8 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
     pcl_out = *(meas.lidar);
     sort(pcl_out.points.begin(), pcl_out.points.end(), time_list);
     // cout<<"[ IMU Process ]: Process lidar from "<<pcl_beg_time<<" to "<<pcl_end_time<<", " \
-  //          <<meas.imu.size()<<" imu msgs from "<<imu_beg_time<<" to "<<imu_end_time<<endl;
+    // <<(pcl_beg_time - pcl_end_time)<<", "
+    // <<meas.imu.size()<<" imu msgs from "<<imu_beg_time<<" to "<<imu_end_time<<endl;
 
     /*** Initialize IMU pose ***/
     state_ikfom imu_state = kf_state.get_x();
@@ -349,33 +351,41 @@ void ImuProcess::Process(const MeasureGroup &meas,
 {
     if (meas.imu.empty())
     {
+        cout<<"imu is empty!"<<endl;
         return;
     };
     ROS_ASSERT(meas.lidar != nullptr);
 
     if (imu_need_init_)
     {
+        if(!Dynamic_init){
+                /// The very first lidar frame
+                IMU_init(meas, kf_state, init_iter_num);
+                imu_need_init_ = true;
 
-        /// The very first lidar frame
-        IMU_init(meas, kf_state, init_iter_num);
-        imu_need_init_ = true;
+                last_imu_ = meas.imu.back();
 
-        last_imu_ = meas.imu.back();
+                state_ikfom imu_state = kf_state.get_x();
+                if (init_iter_num > MAX_INI_COUNT)
+                {
+                    cov_acc *= pow(G_m_s2 / mean_acc.norm(), 2);
+                    imu_need_init_ = false;
 
-        state_ikfom imu_state = kf_state.get_x();
-        if (init_iter_num > MAX_INI_COUNT)
-        {
-            cov_acc *= pow(G_m_s2 / mean_acc.norm(), 2);
+                    cov_acc = cov_acc_scale;
+                    cov_gyr = cov_gyr_scale;
+                    ROS_INFO("IMU Initial Done");
+                    // ROS_INFO("IMU Initial Done: Gravity: %.4f %.4f %.4f %.4f; state.bias_g: %.4f %.4f %.4f; acc covarience: %.8f %.8f %.8f; gry covarience: %.8f %.8f %.8f",\
+            //          imu_state.grav[0], imu_state.grav[1], imu_state.grav[2], mean_acc.norm(), cov_bias_gyr[0], cov_bias_gyr[1], cov_bias_gyr[2], cov_acc[0], cov_acc[1], cov_acc[2], cov_gyr[0], cov_gyr[1], cov_gyr[2]);
+                    fout_imu.open(DEBUG_FILE_DIR("imu.txt"), ios::out);
+                }
+        }
+        else{
+            printf(BOLDMAGENTA "[Iteration] Switch to LIO mode, iteration begins.\n\n" RESET);
+            last_imu_   = meas.imu.back();
             imu_need_init_ = false;
-
             cov_acc = cov_acc_scale;
             cov_gyr = cov_gyr_scale;
-            ROS_INFO("IMU Initial Done");
-            // ROS_INFO("IMU Initial Done: Gravity: %.4f %.4f %.4f %.4f; state.bias_g: %.4f %.4f %.4f; acc covarience: %.8f %.8f %.8f; gry covarience: %.8f %.8f %.8f",\
-    //          imu_state.grav[0], imu_state.grav[1], imu_state.grav[2], mean_acc.norm(), cov_bias_gyr[0], cov_bias_gyr[1], cov_bias_gyr[2], cov_acc[0], cov_acc[1], cov_acc[2], cov_gyr[0], cov_gyr[1], cov_gyr[2]);
-            fout_imu.open(DEBUG_FILE_DIR("imu.txt"), ios::out);
         }
-
         return;
     }
     UndistortPcl(meas, kf_state, *cur_pcl_un_);

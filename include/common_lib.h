@@ -56,6 +56,7 @@ typedef Matrix3f M3F;
 const M3D Eye3d(M3D::Identity());
 const M3F Eye3f(M3F::Identity());
 const V3D Zero3d(0, 0, 0);
+const V3D E3d(1, 1, 1);
 const V3F Zero3f(0, 0, 0);
 
 

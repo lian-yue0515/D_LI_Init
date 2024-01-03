@@ -65,7 +65,7 @@ public:
     Pose pose_cur{0,0,0,0,0,0};
     V3D acc_0;
     V3D gyr_0;
-    bool dynamic_init_fished = true;
+    bool dynamic_init_fished = false;
     bool Data_processing_fished = false;
     deque<CalibState> system_state;
 

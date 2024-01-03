@@ -90,7 +90,6 @@ pcl::VoxelGrid<PointType> downSizeFilterSurf;
 pcl::VoxelGrid<PointType> downSizeFilterMap;
 
 KD_TREE<PointType> ikdtree;
-KD_TREE<PointType> ikdtree_init;
 
 V3F XAxisPoint_body(LIDAR_SP_LEN, 0.0, 0.0);
 V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);
@@ -227,11 +226,8 @@ void RGBpointBodyLidarToIMU(PointType const * const pi, PointType * const po)
 void points_cache_collect()
 {
     PointVector points_history;
-    if(!dynamic_init->dynamic_init_fished){
-        ikdtree_init.acquire_removed_points(points_history);
-    }else{
-        ikdtree.acquire_removed_points(points_history);
-    }
+
+    ikdtree.acquire_removed_points(points_history);
     // for (int i = 0; i < points_history.size(); i++) _featsArray->push_back(points_history[i]);
 }
 
@@ -281,11 +277,7 @@ void lasermap_fov_segment()
 
     points_cache_collect();
     double delete_begin = omp_get_wtime();
-    if(!dynamic_init->dynamic_init_fished){
-        if(cub_needrm.size() > 0) kdtree_delete_counter = ikdtree_init.Delete_Point_Boxes(cub_needrm);
-    }else{
-        if(cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
-    }
+    if(cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
     kdtree_delete_time = omp_get_wtime() - delete_begin;
     
 }
@@ -352,7 +344,6 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in)
     publish_count ++;
     // cout<<"IMU got at: "<<msg_in->header.stamp.toSec()<<endl;
     sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
-
     if (abs(timediff_lidar_wrt_imu) > 0.1 && time_sync_en)
     {
         msg->header.stamp = \
@@ -388,13 +379,15 @@ bool sync_packages(MeasureGroup &meas)
     if(!lidar_pushed)
     {
         meas.lidar = lidar_buffer.front();
-        meas.lidar_beg_time = time_buffer.front();
-        if (meas.lidar->points.size() <= 1) // time too little
-        {
-            lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
+        if (meas.lidar->points.size() <= 1) {
             ROS_WARN("Too few input point cloud!\n");
+            lidar_buffer.pop_front();
+            time_buffer.pop_front();
+            return false;
         }
-        else if (meas.lidar->points.back().curvature / double(1000) < 0.5 * lidar_mean_scantime)
+        meas.lidar_beg_time = time_buffer.front();
+
+        if (meas.lidar->points.back().curvature / double(1000) < 0.5 * lidar_mean_scantime)
         {
             lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
         }
@@ -409,7 +402,6 @@ bool sync_packages(MeasureGroup &meas)
 
         lidar_pushed = true;
     }
-
     if (last_timestamp_imu < lidar_end_time)
     {
         return false;
@@ -418,6 +410,9 @@ bool sync_packages(MeasureGroup &meas)
     /*** push imu data, and pop from imu buffer ***/
     double imu_time = imu_buffer.front()->header.stamp.toSec();
     meas.imu.clear();
+    // if(imu_time > lidar_end_time){
+    //     return false;
+    // }
     while ((!imu_buffer.empty()) && (imu_time < lidar_end_time))
     {
         imu_time = imu_buffer.front()->header.stamp.toSec();
@@ -429,6 +424,7 @@ bool sync_packages(MeasureGroup &meas)
     lidar_buffer.pop_front();
     time_buffer.pop_front();
     lidar_pushed = false;
+    // cout<<"sync_packages size: "<<meas.imu.size()<<endl;
     return true;
 }
 
@@ -476,15 +472,10 @@ void map_incremental()
     }
 
     double st_time = omp_get_wtime();
-    if(!dynamic_init->dynamic_init_fished){
-        add_point_size = ikdtree_init.Add_Points(PointToAdd, true);
-        ikdtree_init.Add_Points(PointNoNeedDownsample, false); 
-        add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
-    }else{
-        add_point_size = ikdtree.Add_Points(PointToAdd, true);
-        ikdtree.Add_Points(PointNoNeedDownsample, false); 
-        add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
-    }
+
+    add_point_size = ikdtree.Add_Points(PointToAdd, true);
+    ikdtree.Add_Points(PointNoNeedDownsample, false); 
+    add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
     kdtree_incremental_time = omp_get_wtime() - st_time;
 }
 
@@ -679,15 +670,9 @@ void h_share_model(state_ikfom &s, esekfom::dyn_share_datastruct<double> &ekfom_
 
         if (ekfom_data.converge)
         {
-            if(!dynamic_init->dynamic_init_fished){
-                /** Find the closest surfaces in the map **/
-                ikdtree_init.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
-                point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS ? false : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false : true;
-            }else{
-                /** Find the closest surfaces in the map **/
-                ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
-                point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS ? false : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false : true;
-            }
+            /** Find the closest surfaces in the map **/
+            ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
+            point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS ? false : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false : true;
         }
 
         if (!point_selected_surf[i]) continue;
@@ -783,8 +768,8 @@ int main(int argc, char** argv)
     nh.param<string>("common/imu_topic", imu_topic,"/livox/imu");
     nh.param<bool>("common/time_sync_en", time_sync_en, false);
     nh.param<double>("filter_size_corner",filter_size_corner_min,0.6);
-    nh.param<double>("filter_size_surf",filter_size_surf_min,0.6);
-    nh.param<double>("filter_size_map",filter_size_map_min,0.6);
+    nh.param<double>("filter_size_surf",filter_size_surf_min,0.05);
+    nh.param<double>("filter_size_map",filter_size_map_min,0.05);
     nh.param<double>("cube_side_length",cube_len,200);
     nh.param<float>("mapping/det_range",DET_RANGE,300.f);
     nh.param<double>("mapping/fov_degree",fov_deg,180);
@@ -845,7 +830,7 @@ int main(int argc, char** argv)
 
     ofstream fout_pre, fout_out, fout_true;
     fout_pre.open(DEBUG_FILE_DIR("mat_pre.txt"),ios::out);
-    fout_out.open(DEBUG_FILE_DIR("mat_out.txt"),ios::out);
+    fout_out.open(DEBUG_FILE_DIR("pos_out.txt"),ios::out);
     fout_true.open(DEBUG_FILE_DIR("fout_true.txt"),ios::out);
     if (fout_pre && fout_out && fout_true)
         cout << "~~~~"<<ROOT_DIR<<" file opened" << endl;
@@ -874,58 +859,87 @@ int main(int argc, char** argv)
     ros::Rate rate(5000);
     bool status = ros::ok();
     int count = 0;
-    while( ! dynamic_init->Data_processing_fished )
-    {
-        if(sync_packages(Measures)) {
-            if(dynamic_init->Data_processing(Measures, icp_state))
-            {
-                if(!dynamic_init->Undistortpoint.empty() && !dynamic_init->Initialized_data.empty())
-                {
-                    pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
-                    pcl::PointCloud<PointType>::Ptr cloudshowqujibian_i(new pcl::PointCloud<PointType>());
-                    std::string filenamequjibian = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian.pcd";
-                    std::string filenamequjibian_i = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian_i.pcd";
-                    for(int i = 0; i < dynamic_init->Undistortpoint.size(); i++){
-                        *cloudshowqujibian += *dynamic_init->Undistortpoint[i];
-                        *cloudshowqujibian_i += *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
-                        pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                        *cloudshow = *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
-                        std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian"+ std::to_string(i)+ ".pcd";
-                        pcl::io::savePCDFile(filename, *(cloudshow));
-                    }
-                    pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
-                    pcl::io::savePCDFile(filenamequjibian_i, *(cloudshowqujibian_i));
-                    
-                    std::string filenameyuanshi = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi.pcd";
-                    pcl::PointCloud<PointType>::Ptr cloudshowyuanshi(new pcl::PointCloud<PointType>());
-                    std::string filenameyuanshi_no = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_no.pcd";
-                    pcl::PointCloud<PointType>::Ptr cloudshowyuanshi_no(new pcl::PointCloud<PointType>());
-                    for (int i = 0; i < dynamic_init->Initialized_data.size(); i++)
-                    {
-                        *cloudshowyuanshi += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
-                        *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
-                        pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                        *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
-                        std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
-                        pcl::io::savePCDFile(filename, *(cloudshow));
-                    }
-                    pcl::io::savePCDFile(filenameyuanshi, *(cloudshowyuanshi));
-                    pcl::io::savePCDFile(filenameyuanshi_no, *(cloudshowyuanshi_no));
-                    
-                }
-                dynamic_init->Data_processing_fished = true;
-                dynamic_init->solve_Rot_bias_gyro();
-                VectorXd x_;
-                dynamic_init->LinearAlignment_withoutba(icp_state, x_);
-            }
-        }
-    }
+    
     int measures_num = -1;
     bool data_alignment = 0;
     while (status)
     {
         if (flg_exit) break;
         ros::spinOnce();
+        if(!dynamic_init->Data_processing_fished){
+            if(sync_packages(Measures)) {
+                if (flg_first_scan)
+                {
+                    first_lidar_time = Measures.lidar_beg_time;
+                    p_imu->first_lidar_time = first_lidar_time;
+                    flg_first_scan = false;
+                    continue;
+                }
+                if(dynamic_init->Data_processing(Measures, icp_state))
+                {
+                    if(!dynamic_init->Undistortpoint.empty() && !dynamic_init->Initialized_data.empty())
+                    {
+                        pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
+                        pcl::PointCloud<PointType>::Ptr cloudshowqujibian_i(new pcl::PointCloud<PointType>());
+                        std::string filenamequjibian = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian.pcd";
+                        std::string filenamequjibian_i = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian_i.pcd";
+                        for(int i = 0; i < dynamic_init->Undistortpoint.size(); i++){
+                            *cloudshowqujibian += *dynamic_init->Undistortpoint[i];
+                            *cloudshowqujibian_i += *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
+                            pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                            *cloudshow = *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
+                            std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian"+ std::to_string(i)+ ".pcd";
+                            pcl::io::savePCDFile(filename, *(cloudshow));
+                        }
+                        pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
+                        pcl::io::savePCDFile(filenamequjibian_i, *(cloudshowqujibian_i));
+                        std::string filenameyuanshi = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi.pcd";
+                        pcl::PointCloud<PointType>::Ptr cloudshowyuanshi(new pcl::PointCloud<PointType>());
+                        std::string filenameyuanshi_no = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_no.pcd";
+                        pcl::PointCloud<PointType>::Ptr cloudshowyuanshi_no(new pcl::PointCloud<PointType>());
+                        for (int i = 0; i < dynamic_init->Initialized_data.size(); i++)
+                        {
+                            *cloudshowyuanshi += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
+                            *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
+                            pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
+                            std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
+                            pcl::io::savePCDFile(filename, *(cloudshow));
+                        }
+                        pcl::io::savePCDFile(filenameyuanshi, *(cloudshowyuanshi));
+                        pcl::io::savePCDFile(filenameyuanshi_no, *(cloudshowyuanshi_no));
+                        
+                    }
+                    dynamic_init->Data_processing_fished = true;
+                    dynamic_init->solve_Rot_bias_gyro();
+                    VectorXd x_;
+                    dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+                    state_ikfom state_init = kf.get_x();
+                    state_init.ba = Zero3d;
+                    state_init.offset_R_L_I = Lidar_R_wrt_IMU;
+                    state_init.offset_T_L_I = Lidar_T_wrt_IMU;
+                    state_init.pos = Zero3d;
+                    state_init.rot = Eye3d;
+                    state_init.bg = dynamic_init->get_gyro_bias();
+                    state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
+                    state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+                    kf.change_x(state_init);
+                    esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf.get_P();
+                    init_P.setIdentity();
+                    init_P(6, 6) = init_P(7, 7) = init_P(8, 8) = 0.00001;  //offset_R_L_I
+                    init_P(9, 9) = init_P(10, 10) = init_P(11, 11) = 0.00001;   //offset_T_L_I
+                    init_P(12, 12) = init_P(13, 13) = init_P(14, 14) = 0.001;  //vel
+                    init_P(15, 15) = init_P(16, 16) = init_P(17, 17) = 0.0001;  //bg
+                    init_P(18, 18) = init_P(19, 19) = init_P(20, 20) = 0.001;  //ba
+                    init_P(21, 21) = init_P(22, 22) = 0.001;  //g
+                    kf.change_P(init_P);
+                    p_imu->Dynamic_init = true;
+                    p_imu->Reset();
+                    flg_first_scan = true;
+                    feats_undistort == NULL;
+                }else{continue;}
+            }
+        }
 
         if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
             measures_num = measures_num + 1;
@@ -937,19 +951,11 @@ int main(int argc, char** argv)
         }
         if(data_alignment) 
         {
-            if (flg_first_scan)
-            {
-                first_lidar_time = Measures.lidar_beg_time;
-                p_imu->first_lidar_time = first_lidar_time;
-                flg_first_scan = false;
-                continue;
-            }
-
             p_imu->Process(Measures, kf, feats_undistort);
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
-            if (feats_undistort->empty() || (feats_undistort == NULL))
-            {
+
+            if (feats_undistort->empty() || (feats_undistort == NULL)) {
                 ROS_WARN("No point, skip this scan!\n");
                 continue;
             }
@@ -975,22 +981,20 @@ int main(int argc, char** argv)
                     }
                     ikdtree.Build(feats_down_world->points);
                 }
-                continue;
+                // continue;
             }
             int featsFromMapNum = ikdtree.validnum();
             kdtree_size_st = ikdtree.size();
             /*** ICP and iterated Kalman filter update ***/
             if (feats_down_size < 5)
             {
-                ROS_WARN("No point, skip this scan!\n");
+                ROS_WARN("feats_down_size < 5, skip this scan!\n");
                 continue;
             }
             normvec->resize(feats_down_size);
             feats_down_world->resize(feats_down_size);
 
             V3D ext_euler = SO3ToEuler(state_point.offset_R_L_I);
-            fout_pre<<setw(20)<<Measures.lidar_beg_time - first_lidar_time<<" "<<euler_cur.transpose()<<" "<< state_point.pos.transpose()<<" "<<ext_euler.transpose() << " "<<state_point.offset_T_L_I.transpose()<< " " << state_point.vel.transpose() \
-            <<" "<<state_point.bg.transpose()<<" "<<state_point.ba.transpose()<<" "<<state_point.grav<< endl;
             if(0) // If you need to see map point, change to "if(1)"
             {
                 PointVector ().swap(ikdtree.PCL_Storage);
@@ -1001,14 +1005,14 @@ int main(int argc, char** argv)
             pointSearchInd_surf.resize(feats_down_size);
             Nearest_Points.resize(feats_down_size);
             int  rematch_num = 0;
-            bool nearest_search_en = true; //
-
+            bool nearest_search_en = true; 
             /*** iterated state estimation ***/
             double solve_H_time = 0;
             kf.update_iterated_dyn_share_modified(LASER_POINT_COV, solve_H_time);
             state_point = kf.get_x();
             // fout_true<<count<<" "<<"vel: "<<state_point.vel.transpose()\
             // <<" "<<"bg: "<<state_point.bg.transpose()<<" "<<"ba: "<<state_point.ba.transpose()<<" "<<"g: "<<state_point.grav<< endl;
+            fout_out<<count<<" "<<"pos: "<<state_point.pos.transpose()<<"g: "<<state_point.grav<< endl;
             count++;
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
@@ -1016,6 +1020,19 @@ int main(int argc, char** argv)
             geoQuat.y = state_point.rot.coeffs()[1];
             geoQuat.z = state_point.rot.coeffs()[2];
             geoQuat.w = state_point.rot.coeffs()[3];
+            tf2::Quaternion quat(geoQuat.x, geoQuat.y, geoQuat.z, geoQuat.w);
+            tf2::Matrix3x3 mat(quat);
+            double roll, pitch, yaw;
+            mat.getRPY(roll, pitch, yaw);
+            Pose pose_cur;
+            pose_cur.x = state_point.pos(0);
+            pose_cur.y = state_point.pos(1);
+            pose_cur.z = state_point.pos(2);
+            pose_cur.roll = roll;
+            pose_cur.pitch = pitch;
+            pose_cur.yaw = yaw;
+            dynamic_init->system_state[measures_num+1].R = pose_cur.poseto_rotation();
+            dynamic_init->system_state[measures_num+1].T = pose_cur.poseto_position();
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
             /*** add the feature points to map kdtree ***/
@@ -1024,6 +1041,36 @@ int main(int argc, char** argv)
             if (path_en)                         publish_path(pubPath);                      
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
+            if(measures_num == dynamic_init->data_accum_length - 1){
+                dynamic_init->solve_Rot_bias_gyro();
+                VectorXd x_;
+                dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+                state_ikfom state_init = kf.get_x();
+                state_init.ba = Zero3d;
+                state_init.offset_R_L_I = Lidar_R_wrt_IMU;
+                state_init.offset_T_L_I = Lidar_T_wrt_IMU;
+                state_init.pos = Zero3d;
+                state_init.rot = Eye3d;
+                state_init.bg = dynamic_init->get_gyro_bias();
+                state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
+                state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+                kf.change_x(state_init);
+                esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf.get_P();
+                init_P.setIdentity();
+                init_P(6, 6) = init_P(7, 7) = init_P(8, 8) = 0.00001;  //offset_R_L_I
+                init_P(9, 9) = init_P(10, 10) = init_P(11, 11) = 0.00001;   //offset_T_L_I
+                init_P(12, 12) = init_P(13, 13) = init_P(14, 14) = 0.001;  //vel
+                init_P(15, 15) = init_P(16, 16) = init_P(17, 17) = 0.0001;  //bg
+                init_P(18, 18) = init_P(19, 19) = init_P(20, 20) = 0.001;  //ba
+                init_P(21, 21) = init_P(22, 22) = 0.001;  //g
+                kf.change_P(init_P);
+                p_imu->Dynamic_init = true;
+                p_imu->Reset();
+                ikdtree.Root_Node = nullptr;
+                flg_first_scan = true;
+                feats_undistort == NULL;
+                // return 0;
+            }
         }
 
         status = ros::ok();
