@@ -99,6 +99,9 @@ public:
     inline V3D get_V_0() {
     return V_0;
     }
+    inline double get_g() {
+    return g_;
+    }
 
 private:
     /// Parameters needed to be calibrateds
@@ -106,6 +109,7 @@ private:
     V3D gyro_bias;                // gyro bias
     V3D acc_bias;                 // acc bias
     V3D V_0;                           // initial velocity
+    double g_;
 };
 
 #endif

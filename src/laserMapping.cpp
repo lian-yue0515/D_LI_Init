@@ -97,6 +97,8 @@ V3D euler_cur;
 V3D position_last(Zero3d);
 V3D Lidar_T_wrt_IMU(Zero3d);
 M3D Lidar_R_wrt_IMU(Eye3d);
+double Last_g;
+double current_g;
 
 /*** EKF inputs and output ***/
 MeasureGroup Measures;
@@ -913,6 +915,7 @@ int main(int argc, char** argv)
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
                     dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+                    Last_g = dynamic_init->get_g();
                     state_ikfom state_init = kf.get_x();
                     state_init.ba = Zero3d;
                     state_init.offset_R_L_I = Lidar_R_wrt_IMU;
@@ -1053,11 +1056,13 @@ int main(int argc, char** argv)
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
                     dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+                    current_g = dynamic_init->get_g();
                 }
-                if(1)
+                if(abs(Last_g-current_g) < 0.001)
                 {
                     dynamic_init->dynamic_init_fished = true;
                 }else{
+                    Last_g  = current_g;
                     state_ikfom state_init = kf.get_x();
                     state_init.ba = Zero3d;
                     state_init.offset_R_L_I = Lidar_R_wrt_IMU;
@@ -1080,7 +1085,8 @@ int main(int argc, char** argv)
                     p_imu->Dynamic_init = true;
                     p_imu->Reset();
                     ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
-                    ikdtree.Root_Node = nullptr;
+                    std::chrono::milliseconds delayDuration(5);
+                    std::this_thread::sleep_for(delayDuration);
                     flg_first_scan = true;
                     feats_undistort == NULL;
 

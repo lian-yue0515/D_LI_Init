@@ -668,6 +668,7 @@ void Dynamic_init::LinearAlignment_withoutba(StatesGroup icp_state, VectorXd &x)
     // cout<<"size: "<<x.size()<<endl;
     ROS_WARN_STREAM(" result g     " << g.norm() << " " << g.transpose());
     ROS_WARN_STREAM(" v_0     " <<  v_0.transpose());
+    g_ = g.norm();
     RefineGravity_withoutba(icp_state, g, x);
     auto v_0_ = x.segment<3>(0);
     cout<<"----------------------------------------------------"<<endl;
