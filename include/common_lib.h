@@ -344,7 +344,7 @@ struct Pose {
     {
         Eigen::Affine3f SE3_p1 = pcl::getTransformation(x, y, z, roll, pitch, yaw);
         Eigen::Affine3f SE3_p2 = pcl::getTransformation(_p2.x, _p2.y, _p2.z, _p2.roll, _p2.pitch, _p2.yaw);
-        Eigen::Matrix4f SE3_delta0 = SE3_p1.matrix().inverse() * SE3_p2.matrix();
+        Eigen::Matrix4f SE3_delta0 = SE3_p2.matrix().inverse() * SE3_p1.matrix();
         Eigen::Affine3f SE3_delta;
         SE3_delta.matrix() = SE3_delta0;
         float dx, dy, dz, droll, dpitch, dyaw;
@@ -356,7 +356,7 @@ struct Pose {
         Pose poseOut;
         Eigen::Affine3f posein_a = pcl::getTransformation(pose1.x, pose1.y, pose1.z, pose1.roll, pose1.pitch, pose1.yaw);
         Eigen::Affine3f poseout_a = pcl::getTransformation(pose2.x, pose2.y, pose2.z, pose2.roll, pose2.pitch, pose2.yaw);;
-        Eigen::Affine3f Out_a = poseout_a * posein_a;
+        Eigen::Affine3f Out_a = posein_a * poseout_a;
         float tx, ty, tz, roll, pitch, yaw;
         pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, roll, pitch, yaw);
         poseOut.x = tx;

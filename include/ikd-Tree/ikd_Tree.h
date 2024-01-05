@@ -155,7 +155,6 @@ public:
             heap_size = 0;
             return;
         }
-
     private:
         PointType_CMP *heap;
         void MoveDown(int heap_index)
@@ -296,7 +295,6 @@ private:
     bool Criterion_Check(KD_TREE_NODE *root);
     void Push_Down(KD_TREE_NODE *root);
     void Update(KD_TREE_NODE *root);
-    void delete_tree_nodes(KD_TREE_NODE **root);
     void downsample(KD_TREE_NODE **root);
     bool same_point(PointType a, PointType b);
     float calc_dist(PointType a, PointType b);
@@ -325,6 +323,7 @@ public:
     int validnum();
     void root_alpha(float &alpha_bal, float &alpha_del);
     void Build(PointVector point_cloud);
+    void delete_tree_nodes(KD_TREE_NODE **root);
     void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> &Point_Distance, float max_dist = INFINITY);
     void Box_Search(const BoxPointType &Box_of_Point, PointVector &Storage);
     void Radius_Search(PointType point, const float radius, PointVector &Storage);

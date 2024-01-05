@@ -472,9 +472,8 @@ void map_incremental()
     }
 
     double st_time = omp_get_wtime();
-
     add_point_size = ikdtree.Add_Points(PointToAdd, true);
-    ikdtree.Add_Points(PointNoNeedDownsample, false); 
+    ikdtree.Add_Points(PointNoNeedDownsample, false);
     add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
     kdtree_incremental_time = omp_get_wtime() - st_time;
 }
@@ -951,7 +950,14 @@ int main(int argc, char** argv)
         }
         if(data_alignment) 
         {
-            p_imu->Process(Measures, kf, feats_undistort);
+            p_imu->Process(Measures, kf, feats_undistort, flg_first_scan);
+            std::string fastliopcl = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/fastlio/fastliopcl"+ std::to_string(measures_num)+ ".pcd";
+            pcl::io::savePCDFile(fastliopcl, *feats_undistort);
+            if (flg_first_scan)
+            {
+                flg_first_scan = false;
+            }
+            flg_first_scan = false;
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
@@ -981,7 +987,8 @@ int main(int argc, char** argv)
                     }
                     ikdtree.Build(feats_down_world->points);
                 }
-                // continue;
+                cout<<"ikdtree的构建"<<endl;
+                continue;
             }
             int featsFromMapNum = ikdtree.validnum();
             kdtree_size_st = ikdtree.size();
@@ -1042,34 +1049,43 @@ int main(int argc, char** argv)
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
             if(measures_num == dynamic_init->data_accum_length - 1){
-                dynamic_init->solve_Rot_bias_gyro();
-                VectorXd x_;
-                dynamic_init->LinearAlignment_withoutba(icp_state, x_);
-                state_ikfom state_init = kf.get_x();
-                state_init.ba = Zero3d;
-                state_init.offset_R_L_I = Lidar_R_wrt_IMU;
-                state_init.offset_T_L_I = Lidar_T_wrt_IMU;
-                state_init.pos = Zero3d;
-                state_init.rot = Eye3d;
-                state_init.bg = dynamic_init->get_gyro_bias();
-                state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
-                state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
-                kf.change_x(state_init);
-                esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf.get_P();
-                init_P.setIdentity();
-                init_P(6, 6) = init_P(7, 7) = init_P(8, 8) = 0.00001;  //offset_R_L_I
-                init_P(9, 9) = init_P(10, 10) = init_P(11, 11) = 0.00001;   //offset_T_L_I
-                init_P(12, 12) = init_P(13, 13) = init_P(14, 14) = 0.001;  //vel
-                init_P(15, 15) = init_P(16, 16) = init_P(17, 17) = 0.0001;  //bg
-                init_P(18, 18) = init_P(19, 19) = init_P(20, 20) = 0.001;  //ba
-                init_P(21, 21) = init_P(22, 22) = 0.001;  //g
-                kf.change_P(init_P);
-                p_imu->Dynamic_init = true;
-                p_imu->Reset();
-                ikdtree.Root_Node = nullptr;
-                flg_first_scan = true;
-                feats_undistort == NULL;
-                // return 0;
+                if(!dynamic_init->dynamic_init_fished){
+                    dynamic_init->solve_Rot_bias_gyro();
+                    VectorXd x_;
+                    dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+                }
+                if(1)
+                {
+                    dynamic_init->dynamic_init_fished = true;
+                }else{
+                    state_ikfom state_init = kf.get_x();
+                    state_init.ba = Zero3d;
+                    state_init.offset_R_L_I = Lidar_R_wrt_IMU;
+                    state_init.offset_T_L_I = Lidar_T_wrt_IMU;
+                    state_init.pos = Zero3d;
+                    state_init.rot = Eye3d;
+                    state_init.bg = dynamic_init->get_gyro_bias();
+                    state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
+                    state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+                    kf.change_x(state_init);
+                    esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf.get_P();
+                    init_P.setIdentity();
+                    init_P(6, 6) = init_P(7, 7) = init_P(8, 8) = 0.00001;  //offset_R_L_I
+                    init_P(9, 9) = init_P(10, 10) = init_P(11, 11) = 0.00001;   //offset_T_L_I
+                    init_P(12, 12) = init_P(13, 13) = init_P(14, 14) = 0.001;  //vel
+                    init_P(15, 15) = init_P(16, 16) = init_P(17, 17) = 0.0001;  //bg
+                    init_P(18, 18) = init_P(19, 19) = init_P(20, 20) = 0.001;  //ba
+                    init_P(21, 21) = init_P(22, 22) = 0.001;  //g
+                    kf.change_P(init_P);
+                    p_imu->Dynamic_init = true;
+                    p_imu->Reset();
+                    ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
+                    ikdtree.Root_Node = nullptr;
+                    flg_first_scan = true;
+                    feats_undistort == NULL;
+
+                    // return 0;
+                }
             }
         }
 
