@@ -361,8 +361,9 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
     state_ikfom imu_state = kf_state.get_x();
     IMUpose.clear();
     IMUpose.push_back(set_pose6d(((*(v_imu.end()-1))->header.stamp.toSec() - pcl_beg_time), acc_s_last, angvel_last, imu_state.vel, imu_state.pos, imu_state.rot.toRotationMatrix()));
-
-    /*** forward propagation at each imu point ***/
+    cout<<"pos_end_pre: "<<imu_state.pos<<endl;
+    cout<<"vel_pre: "<<imu_state.vel<<endl;
+    /*** back propagation at each imu point ***/
     V3D acc_imu, angvel_avr, acc_avr, vel_imu(imu_state.vel), pos_imu(imu_state.pos);
     M3D R_imu(imu_state.rot);
     double dt = 0;
@@ -409,13 +410,74 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
     }
 
     // /*** calculated the pos and attitude prediction at the frame-end ***/
-    // double note = pcl_beg_time > imu_beg_time ? 1.0 : -1.0;
-    // dt = note * (pcl_beg_time - imu_beg_time);
-    // V3D vel_end = vel_imu - note * acc_imu * dt;
-    // M3D rot_end = R_imu * (Exp(V3D(note * angvel_avr), dt)).transpose();
-    // V3D pos_end = pos_imu - note * vel_imu * dt - note * 0.5 * acc_imu * dt * dt;
-    // cout<<"pos_end: "<<pos_end<<endl;
+    double note = pcl_beg_time > imu_beg_time ? 1.0 : -1.0;
+    dt = note * (pcl_beg_time - imu_beg_time);
+    V3D vel_end = vel_imu - note * acc_imu * dt;
+    M3D rot_end = R_imu * (Exp(V3D(note * angvel_avr), dt)).transpose();
+    V3D pos_end = pos_imu - note * vel_imu * dt - note * 0.5 * acc_imu * dt * dt;
+    cout<<"pos_end_back: "<<pos_end.transpose()<<endl;
+    cout<<"vel_end_back: "<<vel_end.transpose()<<endl;
 
+    {
+        V3D acc_imu_, angvel_avr_, acc_avr_, vel_imu_(vel_end), pos_imu_(pos_end);
+        M3D R_imu_(rot_end);
+
+        double dt = 0;
+        for (auto it_imu = v_imu.begin(); it_imu < (v_imu.end() - 1); it_imu++)
+        {
+            auto &&head = *(it_imu);
+            auto &&tail = *(it_imu + 1);
+
+            if (tail->header.stamp.toSec() < pcl_beg_time)    continue;
+            
+            angvel_avr_<<0.5 * (head->angular_velocity.x + tail->angular_velocity.x),
+                        0.5 * (head->angular_velocity.y + tail->angular_velocity.y),
+                        0.5 * (head->angular_velocity.z + tail->angular_velocity.z);
+
+
+            acc_avr_   <<0.5 * (head->linear_acceleration.x + tail->linear_acceleration.x),
+                        0.5 * (head->linear_acceleration.y + tail->linear_acceleration.y),
+                        0.5 * (head->linear_acceleration.z + tail->linear_acceleration.z);
+
+
+            angvel_avr_ -= imu_state.bg;
+            acc_avr_     = acc_avr_ / mean_acc_norm * G_m_s2 - imu_state.ba;
+
+            if(head->header.stamp.toSec() < pcl_beg_time)
+                dt = tail->header.stamp.toSec() - pcl_beg_time;
+            else
+                dt = tail->header.stamp.toSec() - head->header.stamp.toSec();
+            
+
+            M3D Exp_f   = Exp(angvel_avr_, dt);
+
+            /* propagation of IMU attitude (global frame)*/
+            R_imu_ = R_imu_ * Exp_f;
+
+            /* Specific acceleration (global frame) of IMU */
+            acc_imu_ = R_imu_ * acc_avr_ + V3D(imu_state.grav);
+
+            /* propagation of IMU position (global frame)*/
+            pos_imu_ = pos_imu_ + vel_imu_ * dt + 0.5 * acc_imu_ * dt * dt;
+
+            /* velocity of IMU (global frame)*/
+            vel_imu_ = vel_imu_ + acc_imu_ * dt;
+
+            /* save the poses at each IMU measurements (global frame)*/
+            angvel_last = angvel_avr_;
+            acc_s_last  = acc_imu_;
+            double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;
+        }
+
+        /*** calculated the pos and attitude prediction at the frame-end ***/
+        double note_ = pcl_end_time > imu_end_time ? 1.0 : -1.0;
+        dt = note_ * (pcl_end_time - imu_end_time);
+        V3D vel_end_ = vel_imu_ + note * acc_imu_ * dt;
+        M3D rot_end_ = R_imu_ * Exp(V3D(note_ * angvel_avr_), dt);
+        V3D pos_end_ = pos_imu_ + note * vel_imu_ * dt + note * 0.5 * acc_imu_ * dt * dt;
+        cout<<"pos_end_forword: "<<pos_end_.transpose()<<endl;
+        cout<<"vel_end_forword: "<<vel_end_.transpose()<<endl;
+    }
     imu_state = kf_state.get_x();
     last_imu_ = meas.imu.back();
     last_lidar_end_time_ = pcl_end_time;
