@@ -8,6 +8,7 @@ preprocess:
     scan_line: 32               #  scan_line: 32 
     scan_rate: 10                # only need to be set for velodyne, unit: Hz,
     blind: 4
+    mean_acc_norm: 9.8
 
 mapping:
     acc_cov: 0.1

@@ -17,9 +17,17 @@
 #include <pcl/io/pcd_io.h>
 #include "../integration_base.hpp"
 #include <pcl/registration/icp.h>
+#include <pcl/registration/gicp.h>
+#include <pcl/registration/ndt.h>
 #include <pcl/common/common.h>
 #include <pcl/common/transforms.h>
 #include "../integration_base.hpp"
+#include <pcl/filters/voxel_grid.h>
+#include <teaser/matcher.h>
+#include <teaser/registration.h>
+#include <pcl/features/normal_3d_omp.h>
+#include <pcl/features/fpfh_omp.h>
+#include <pcl_conversions/pcl_conversions.h>
 
 
 #define FILE_DIR(name)     (string(string(ROOT_DIR) + "Log/"+ name))
@@ -31,6 +39,7 @@ using namespace Eigen;
 typedef Vector3d V3D;
 typedef Matrix3d M3D;
 const V3D STD_GRAV = V3D(0, 0, -G_m_s2);
+typedef pcl::PointCloud<pcl::FPFHSignature33> FPFHFeature;
 
 // Lidar Inertial Initialization
 // States needed by Initialization
@@ -52,7 +61,7 @@ public:
     int data_accum_length;
     int lidar_frame_count;
     bool first_point, second_point;
-    double mean_acc_norm = 1;
+    double mean_acc_norm = 9.8;
     std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr> Undistortpoint;
     vector<GYR_> GYR_first;
     vector<GYR_> GYR_pose;

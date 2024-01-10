@@ -33,7 +33,6 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "(x86)|(X86)|(amd64)|(AMD64)" )
 else()
   add_definitions(-DMP_PROC_NUM=1)
 endif()
-
 find_package(OpenMP QUIET)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}   ${OpenMP_C_FLAGS}")
@@ -59,7 +58,24 @@ find_package(Eigen3 REQUIRED)
 find_package(PCL 1.8 REQUIRED)
 find_package(Ceres REQUIRED)
 find_package(fmt REQUIRED)
+find_package(teaserpp REQUIRED)
 set (FMT_LIBRARIES fmt::fmt)
+# pmc (Parallel Maximum Clique)
+unset(PMC CACHE)
+find_library(PMC pmc)
+if(${PMC} STREQUAL "PMC-NOTFOUND")
+    message(WARNING "PMC library was not found, Git Now")
+    execute_process(COMMAND mkdir ${CMAKE_BINARY_DIR}/pmc-src)
+    execute_process(COMMAND mkdir ${CMAKE_BINARY_DIR}/pmc-build)
+    
+    configure_file(cmake/pmc.CMakeLists.txt ${CMAKE_BINARY_DIR}/pmc-download/CMakeLists.txt)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -G "${CMAKE_GENERATOR}" .
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/pmc-download")
+    execute_process(COMMAND "${CMAKE_COMMAND}" --build .
+            WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/pmc-download")
+    add_subdirectory("${CMAKE_BINARY_DIR}/pmc-src"
+            "${CMAKE_BINARY_DIR}/pmc-build")
+endif()
 
 message(Eigen: ${EIGEN3_INCLUDE_DIR})
 
@@ -92,5 +108,5 @@ add_executable(dynamic_init
             include/ikd-Tree/ikd_Tree.cpp 
             include/Dynamic_init/Dynamic_init.cpp
             src/preprocess.cpp)
-target_link_libraries(dynamic_init ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES} ${Sophus_LIBRARIES} fmt)
+target_link_libraries(dynamic_init ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES} ${Sophus_LIBRARIES} fmt pmc teaserpp::teaser_registration teaserpp::teaser_io teaserpp::teaser_features)
 target_include_directories(dynamic_init PRIVATE ${PYTHON_INCLUDE_DIRS})

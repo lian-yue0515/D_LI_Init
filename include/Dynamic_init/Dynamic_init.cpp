@@ -6,6 +6,24 @@ sensor_msgs::ImuConstPtr last_imu_;
 const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
 Pose pose_cur_no{0,0,0,0,0,0};
 Pose icp_result;
+pcl::VoxelGrid<PointType> downSizeFilter1;
+pcl::VoxelGrid<PointType> downSizeFilter2;
+FPFHFeature::Ptr fpfhFeatureLast;
+FPFHFeature::Ptr fpfhFeatureOld;
+void pcd_to_teaser(pcl::PointCloud<PointType>::Ptr &input_cloud, teaser::PointCloud &output_cloud) {
+    for (size_t i = 0; i < input_cloud->points.size(); ++i) {
+        output_cloud.push_back(
+            {input_cloud->points[i].x, input_cloud->points[i].y, input_cloud->points[i].z});
+    }
+}
+
+void voxel_filter(pcl::PointCloud<PointType>::Ptr &cloud, pcl::PointCloud<PointType>::Ptr &cloud_filtered,
+                float leaf_size = 1.0f) {
+    pcl::VoxelGrid<PointType> voxel;
+    voxel.setLeafSize(leaf_size, leaf_size, leaf_size);
+    voxel.setInputCloud(cloud);
+    voxel.filter(*cloud_filtered);
+}
 
 Pose trans2pose(const M3D rot, const V3D tran) {
     Eigen::Affine3f transformation_matrix = Eigen::Affine3f::Identity();
@@ -23,17 +41,129 @@ Pose trans2pose(const M3D rot, const V3D tran) {
     pose.yaw = tyaw;
     return pose;
 }
+FPFHFeature::Ptr computeFPFH(const pcl::PointCloud<PointType>::Ptr &Cloud){
+    pcl::search::KdTree<PointType>::Ptr tree(new pcl::search::KdTree<PointType>());
+    pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>());
+    //------------------FPFH-------------------------------
+    FPFHFeature::Ptr fpfh(new FPFHFeature());
+    pcl::FPFHEstimationOMP<PointType, pcl::Normal, pcl::FPFHSignature33> f;
+    pcl::NormalEstimationOMP<PointType, pcl::Normal> n;
+    n.setInputCloud(Cloud);
+    n.setNumberOfThreads(2); 
+    n.setSearchMethod(tree);
+    n.setKSearch(20);
+    n.compute(*normals);
+    f.setNumberOfThreads(2); 
+    f.setInputCloud(Cloud);
+    f.setInputNormals(normals);
+    f.setSearchMethod(tree);
+    f.setKSearch(20);
+    f.compute(*fpfh);
+    return fpfh;
+} 
+
+Pose doTEASER(pcl::PointCloud<PointType>::Ptr cureKeyframeCloud, pcl::PointCloud<PointType>::Ptr targetKeyframeCloud){
+        auto  FPFHstart = std::chrono::system_clock::now();
+        teaser::PointCloud src_cloud;
+        voxel_filter(cureKeyframeCloud, cureKeyframeCloud, 0.5);
+        pcd_to_teaser(cureKeyframeCloud, src_cloud);
+        teaser::PointCloud tgt_cloud;
+        voxel_filter(targetKeyframeCloud, targetKeyframeCloud, 0.5);
+        pcd_to_teaser(targetKeyframeCloud, tgt_cloud);
+        // 计算FPFH特征
+        fpfhFeatureLast = computeFPFH(targetKeyframeCloud);
+        if(fpfhFeatureOld == NULL){
+            fpfhFeatureOld  = computeFPFH(cureKeyframeCloud);
+        }
+        auto FPFHend = std::chrono::system_clock::now();
+        std::chrono::duration<double> FPFH_seconds = FPFHend - FPFHstart;
+        printf("FPFH Duration: %f ms.\n" ,FPFH_seconds.count() * 1000);
+        // Compute correspondences
+        auto matchstart = std::chrono::system_clock::now();
+        teaser::Matcher matcher;
+        auto correspondences = matcher.calculateCorrespondences(
+            src_cloud, tgt_cloud, *fpfhFeatureOld, *fpfhFeatureLast, true, false, false, 0.95);
+        std::cout << "correspondences.size()" << correspondences.size() << std::endl;
+        auto matchend = std::chrono::system_clock::now();
+        std::chrono::duration<double> match_seconds = matchend - matchstart;
+        printf("match Duration: %f ms.\n" ,match_seconds.count() * 1000);
+        // TEASER预测
+        // Prepare solver parameters
+        teaser::RobustRegistrationSolver::Params params;
+        params.noise_bound = 0.05;
+        params.cbar2 = 1;
+        params.estimate_scaling = false;
+        params.rotation_max_iterations = 50;
+        params.rotation_gnc_factor = 2.0;
+        params.rotation_estimation_algorithm =
+            // teaser::RobustRegistrationSolver::ROTATION_ESTIMATION_ALGORITHM::FGR;
+            teaser::RobustRegistrationSolver::ROTATION_ESTIMATION_ALGORITHM::GNC_TLS;
+        params.rotation_cost_threshold = 1.0e-15;
+        // Solve with TEASER++
+        teaser::RobustRegistrationSolver solver(params);
+        auto start = std::chrono::system_clock::now();
+        solver.solve(src_cloud, tgt_cloud, correspondences);
+        teaser::RegistrationSolution solution = solver.getSolution();
+        M3D Rotation = solution.rotation;
+        V3D Translation = solution.translation;
+        auto end = std::chrono::system_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end - start;
+        printf("Solver Duration: %f ms.\n" ,elapsed_seconds.count() * 1000);
+        return trans2pose(Rotation, Translation);
+}
+
+Pose doNDT(pcl::PointCloud<PointType> cureKeyframeCloud, pcl::PointCloud<PointType> targetKeyframeCloud) {
+    pcl::PointCloud<PointType>::Ptr sourcePtr (new pcl::PointCloud<PointType>);
+    pcl::PointCloud<PointType>::Ptr targetPtr (new pcl::PointCloud<PointType>);
+    sourcePtr = cureKeyframeCloud.makeShared();
+    targetPtr = targetKeyframeCloud.makeShared();
+    pcl::NormalDistributionsTransform<PointType, PointType> ndt;
+    ndt.setTransformationEpsilon(0.01);
+    ndt.setStepSize(0.1);
+    ndt.setResolution(1);
+    ndt.setMaximumIterations(50);
+
+    ndt.setInputSource(sourcePtr);
+    ndt.setInputTarget(targetPtr);
+    pcl::PointCloud<PointType>::Ptr unused_result (new pcl::PointCloud<PointType>);
+    ndt.align (*unused_result, Eigen::Matrix4f::Identity());
+    float loopFitnessScoreThreshold = 0.8;
+    if (ndt.hasConverged() == false || ndt.getFitnessScore() > loopFitnessScoreThreshold)
+    {
+        std::cout << "NDT odometry failed (" << ndt.getFitnessScore() << " > " << loopFitnessScoreThreshold << std::endl;
+    }
+    else
+    {
+        std::cout << "NDT odometry passed (" << ndt.getFitnessScore() << " < " << loopFitnessScoreThreshold << std::endl;
+    }
+    float x, y, z, roll, pitch, yaw;
+    Eigen::Affine3f correctionLidarFrame;
+    correctionLidarFrame = ndt.getFinalTransformation();
+    pcl::getTranslationAndEulerAngles (correctionLidarFrame, x, y, z, roll, pitch, yaw);
+    return Pose{x, y, z, roll, pitch, yaw};
+}
 
 Pose doICP(pcl::PointCloud<PointType> cureKeyframeCloud, pcl::PointCloud<PointType> targetKeyframeCloud)
 {
+    // downSizeFilter1.setLeafSize(0.5, 0.5, 0.5);
+    // downSizeFilter2.setLeafSize(0.5, 0.5, 0.5);
+    // PointCloudXYZI::Ptr feats_down_cur(new PointCloudXYZI());
+    // PointCloudXYZI::Ptr feats_down_tar(new PointCloudXYZI());
+    // downSizeFilter1.setInputCloud(cureKeyframeCloud.makeShared());
+    // downSizeFilter1.filter(*feats_down_cur);
+    // downSizeFilter2.setInputCloud(targetKeyframeCloud.makeShared());
+    // downSizeFilter2.filter(*feats_down_tar);
+    // pcl::PointCloud<pcl::PointXYZINormal>::Ptr sourcePtr = feats_down_cur;
+    // pcl::PointCloud<pcl::PointXYZINormal>::Ptr targetPtr = feats_down_tar;
+
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr sourcePtr = cureKeyframeCloud.makeShared();
     pcl::PointCloud<pcl::PointXYZINormal>::Ptr targetPtr = targetKeyframeCloud.makeShared();
-    pcl::IterativeClosestPoint<pcl::PointXYZINormal, pcl::PointXYZINormal> icp;
-    icp.setMaxCorrespondenceDistance(50);
+    pcl::GeneralizedIterativeClosestPoint<pcl::PointXYZINormal, pcl::PointXYZINormal> icp;
+    icp.setMaxCorrespondenceDistance(10);
     icp.setMaximumIterations(50);
     icp.setTransformationEpsilon(1e-6);
     icp.setEuclideanFitnessEpsilon(1e-6);
-    icp.setRANSACIterations(0);
+    icp.setRANSACIterations(5);
     // Align pointclouds 
     icp.setInputSource(sourcePtr);
     icp.setInputTarget(targetPtr);
@@ -42,11 +172,11 @@ Pose doICP(pcl::PointCloud<PointType> cureKeyframeCloud, pcl::PointCloud<PointTy
     float loopFitnessScoreThreshold = 0.8;
     if (icp.hasConverged() == false || icp.getFitnessScore() > loopFitnessScoreThreshold)
     {
-        // std::cout << "ICP odometry failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << std::endl;
+        std::cout << "ICP odometry failed (" << icp.getFitnessScore() << " > " << loopFitnessScoreThreshold << std::endl;
     }
     else
     {
-        // std::cout << "ICP odometry passed (" << icp.getFitnessScore() << " < " << loopFitnessScoreThreshold << std::endl;
+        std::cout << "ICP odometry passed (" << icp.getFitnessScore() << " < " << loopFitnessScoreThreshold << std::endl;
     }
     float x, y, z, roll, pitch, yaw;
     Eigen::Affine3f correctionLidarFrame;

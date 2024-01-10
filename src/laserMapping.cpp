@@ -426,7 +426,6 @@ bool sync_packages(MeasureGroup &meas)
     lidar_buffer.pop_front();
     time_buffer.pop_front();
     lidar_pushed = false;
-    // cout<<"sync_packages size: "<<meas.imu.size()<<endl;
     return true;
 }
 
@@ -790,6 +789,8 @@ int main(int argc, char** argv)
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
+    nh.param<double>("preprocess/mean_acc_norm", p_imu->mean_acc_norm, 1.0);
+    nh.param<double>("preprocess/mean_acc_norm", dynamic_init->mean_acc_norm, 1.0);
     cout<<"p_pre->lidar_type "<<p_pre->lidar_type<<endl;
     
     path.header.stamp    = ros::Time::now();
@@ -880,34 +881,32 @@ int main(int argc, char** argv)
                 {
                     if(!dynamic_init->Undistortpoint.empty() && !dynamic_init->Initialized_data.empty())
                     {
-                        pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
                         pcl::PointCloud<PointType>::Ptr cloudshowqujibian_i(new pcl::PointCloud<PointType>());
-                        std::string filenamequjibian = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian.pcd";
                         std::string filenamequjibian_i = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian_i.pcd";
                         for(int i = 0; i < dynamic_init->Undistortpoint.size(); i++){
-                            *cloudshowqujibian += *dynamic_init->Undistortpoint[i];
                             *cloudshowqujibian_i += *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
                             pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
                             *cloudshow = *local2global(dynamic_init->Undistortpoint[i], dynamic_init->odom[i]);
                             std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/qujibian"+ std::to_string(i)+ ".pcd";
                             pcl::io::savePCDFile(filename, *(cloudshow));
                         }
-                        pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
                         pcl::io::savePCDFile(filenamequjibian_i, *(cloudshowqujibian_i));
-                        std::string filenameyuanshi = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi.pcd";
-                        pcl::PointCloud<PointType>::Ptr cloudshowyuanshi(new pcl::PointCloud<PointType>());
                         std::string filenameyuanshi_no = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_no.pcd";
                         pcl::PointCloud<PointType>::Ptr cloudshowyuanshi_no(new pcl::PointCloud<PointType>());
                         for (int i = 0; i < dynamic_init->Initialized_data.size(); i++)
                         {
-                            *cloudshowyuanshi += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
+                            pcl::PointCloud<PointType>::Ptr cloudshowyuanshi(new pcl::PointCloud<PointType>());
+                            *cloudshowyuanshi = *dynamic_init->Initialized_data[i].lidar;
+                            cloudshowyuanshi->height = 1;
+                            cloudshowyuanshi->width = dynamic_init->Initialized_data[i].lidar->size();
+                            std::string filenameyuanshi = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_noodome"+ std::to_string(i)+ ".pcd";
+                            pcl::io::savePCDFile(filenameyuanshi, *(cloudshowyuanshi));
                             *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
                             pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
                             *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
                             std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
                             pcl::io::savePCDFile(filename, *(cloudshow));
                         }
-                        pcl::io::savePCDFile(filenameyuanshi, *(cloudshowyuanshi));
                         pcl::io::savePCDFile(filenameyuanshi_no, *(cloudshowyuanshi_no));
                         
                     }
@@ -954,13 +953,18 @@ int main(int argc, char** argv)
         if(data_alignment) 
         {
             p_imu->Process(Measures, kf, feats_undistort, flg_first_scan);
-            std::string fastliopcl = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/fastlio/fastliopcl"+ std::to_string(measures_num)+ ".pcd";
-            pcl::io::savePCDFile(fastliopcl, *feats_undistort);
+            if (!feats_undistort->empty() && (feats_undistort != NULL)) {
+                pcl::PointCloud<PointType>::Ptr cloudshowfastlio(new pcl::PointCloud<PointType>());
+                *cloudshowfastlio = *feats_undistort;
+                cloudshowfastlio->height = 1;
+                cloudshowfastlio->width = feats_undistort->points.size();
+                std::string fastliopcl = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/fastlio/fastliopcl"+ std::to_string(measures_num)+ ".pcd";
+                pcl::io::savePCDFile(fastliopcl, *cloudshowfastlio);
+            }
             if (flg_first_scan)
             {
                 flg_first_scan = false;
             }
-            flg_first_scan = false;
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
@@ -1022,7 +1026,7 @@ int main(int argc, char** argv)
             state_point = kf.get_x();
             // fout_true<<count<<" "<<"vel: "<<state_point.vel.transpose()\
             // <<" "<<"bg: "<<state_point.bg.transpose()<<" "<<"ba: "<<state_point.ba.transpose()<<" "<<"g: "<<state_point.grav<< endl;
-            fout_out<<count<<" "<<"pos: "<<state_point.pos.transpose()<<"g: "<<state_point.grav<< endl;
+            fout_out<<measures_num<<" "<<"pos: "<<state_point.pos.transpose()<<" "<<"vel: "<<state_point.vel.transpose()<<" "<<"g: "<<state_point.grav<< endl;
             count++;
             euler_cur = SO3ToEuler(state_point.rot);
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;

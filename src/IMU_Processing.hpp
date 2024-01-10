@@ -62,7 +62,7 @@ public:
     void change_imu_need(bool a){
         imu_need_init_ = a;
     }   
-    double mean_acc_norm = 1;     
+    double mean_acc_norm = 9.8;     
 
 private:
     void IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N);
@@ -97,7 +97,7 @@ ImuProcess::ImuProcess()
     cov_gyr = V3D(0.1, 0.1, 0.1);
     cov_bias_gyr = V3D(0.0001, 0.0001, 0.0001);
     cov_bias_acc = V3D(0.0001, 0.0001, 0.0001);
-    mean_acc = V3D(0, 0, -1.0);
+    mean_acc = V3D(0, 0, -mean_acc_norm);
     mean_gyr = V3D(0, 0, 0);
     angvel_last = Zero3d;
     angvel_last_ = Zero3d;
@@ -111,7 +111,7 @@ ImuProcess::~ImuProcess() {}
 void ImuProcess::Reset()
 {
     // ROS_WARN("Reset ImuProcess");
-    mean_acc = V3D(0, 0, -1.0);
+    mean_acc = V3D(0, 0, -mean_acc_norm);
     mean_gyr = V3D(0, 0, 0);
     angvel_last = Zero3d;
     angvel_last_ = Zero3d;
@@ -356,6 +356,7 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
     const double &pcl_end_time = meas.lidar_end_time;
 
     pcl_out = *(meas.lidar);
+    cout<<"point_pre"<<pcl_out.size()<<endl;
     sort(pcl_out.points.begin(), pcl_out.points.end(), time_list);
 
     state_ikfom imu_state = kf_state.get_x();
@@ -512,6 +513,7 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
                 break;
         }
     }
+    cout<<"point_after"<<pcl_out.size()<<endl;
 }
 
 void ImuProcess::Process(const MeasureGroup &meas,
@@ -559,7 +561,8 @@ void ImuProcess::Process(const MeasureGroup &meas,
             UndistortPcl_forfirst = firstundistort;
             if(UndistortPcl_forfirst){
                 cout<<"first!"<<endl;
-                UndistortPcl_first(meas, kf_state, *cur_pcl_un_);
+                // UndistortPcl_first(meas, kf_state, *cur_pcl_un_);
+                *cur_pcl_un_ = *meas.lidar;
             }
         }
         return;
