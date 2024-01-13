@@ -901,9 +901,9 @@ int main(int argc, char** argv)
                             cloudshowyuanshi->width = dynamic_init->Initialized_data[i].lidar->size();
                             std::string filenameyuanshi = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_noodome"+ std::to_string(i)+ ".pcd";
                             pcl::io::savePCDFile(filenameyuanshi, *(cloudshowyuanshi));
-                            *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
+                            *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->P2Planeicpodom[i]);
                             pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom[i]);
+                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->icpodom_no[i]);
                             std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
                             pcl::io::savePCDFile(filename, *(cloudshow));
                         }

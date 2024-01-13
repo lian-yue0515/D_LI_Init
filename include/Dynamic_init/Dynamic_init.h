@@ -67,6 +67,7 @@ public:
     vector<GYR_> GYR_pose;
     vector<Pose> icpodom;
     vector<Pose> icpodom_no;
+    vector<Pose> P2Planeicpodom;
     vector<Pose> odom;
     vector<Pose> odom_no;
     vector<MeasureGroup> Initialized_data;

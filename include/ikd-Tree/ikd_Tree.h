@@ -11,7 +11,7 @@
 #include <pcl/point_types.h>
 
 #define EPSS 1e-6
-#define Minimal_Unbalanced_Tree_Size 50000
+#define Minimal_Unbalanced_Tree_Size 500000000
 #define Multi_Thread_Rebuild_Point_Num 1500
 #define DOWNSAMPLE_SWITCH true
 #define ForceRebuildPercentage 0.2

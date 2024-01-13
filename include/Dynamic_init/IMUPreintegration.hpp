@@ -11,7 +11,7 @@ using SO3 = Sophus::SO3d;
 typedef sensor_msgs::Imu::ConstPtr IMU; 
 using namespace std;
 class IMUPreintegration {
-   public:
+    public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     struct Options {
