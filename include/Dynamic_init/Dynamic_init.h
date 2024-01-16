@@ -65,11 +65,10 @@ public:
     std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr> Undistortpoint;
     vector<GYR_> GYR_first;
     vector<GYR_> GYR_pose;
-    vector<Pose> icpodom;
-    vector<Pose> icpodom_no;
     vector<Pose> Trueicpodom;
     vector<Pose> odom;
     vector<Pose> odom_no;
+    vector<Pose> odom_Paremi;
     vector<MeasureGroup> Initialized_data;
     IntegrationBase *tmp_pre_integration;
     Pose pose_cur{0,0,0,0,0,0};

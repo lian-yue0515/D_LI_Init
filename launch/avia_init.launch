@@ -15,7 +15,7 @@
 	<!-- <param name="file_path" type="str" value="/media/myx/Study/FAST_LIO_ws/src/FAST_LIO/Log/fout_true_hit1.txt"/> -->
 	<param name="file_path" type="str" value="/media/myx/Study/FAST_LIO_ws/src/FAST_LIO/Log/fout_true_deseq01.txt"/>
 	<!-- <param name="file_path" type="str" value="/media/myx/Study/FAST_LIO_ws/src/FAST_LIO/Log/fout_true_de2103.txt"/> -->
-	<param name="usetrue" type="bool" value="0" />
+	<param name="usetrue" type="bool" value="1" />
 
     <node pkg="lidar_dynamic_init" type="dynamic_init" name="laserinit" output="screen" /> 
 

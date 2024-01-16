@@ -926,7 +926,7 @@ int main(int argc, char** argv)
                                 *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
                             }
                             pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
+                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_Paremi[i]);
                             std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
                             pcl::io::savePCDFile(filename, *(cloudshow));
                         }
