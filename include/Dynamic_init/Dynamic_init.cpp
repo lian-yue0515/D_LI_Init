@@ -6,6 +6,7 @@ sensor_msgs::ImuConstPtr last_imu_;
 const bool time_(PointType &x, PointType &y) {return (x.curvature < y.curvature);};
 Pose pose_cur_no{0,0,0,0,0,0};
 Pose icp_result;
+std::ostringstream oss;
 
 pcl::VoxelGrid<PointType> downSizeFilter1;
 pcl::VoxelGrid<PointType> downSizeFilter2;
@@ -231,78 +232,32 @@ void Dynamic_init::clear() {
     cout << "\x1B[2J\x1B[H";
 }
 
-bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)
+bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, std::map<double, Pose> &poseMap, bool usetrue)
 {
     Initialized_data.push_back(meas);
     if(first_point){
-        // Pose pose1{0.00744627, -0.0371799, -0.0505446, -0.00318558, 0.00606202, -0.000208252};
-        // P2Planeicpodom.push_back(pose1);
-
-        // Pose pose2{0.00251168, -0.0373727, -0.0404144, 0.00172675, -0.0247911, 0.0190123};
-        // P2Planeicpodom.push_back(pose2);
-
-        // Pose pose3{0.00367635, -0.0280514, 0.00374665, -0.00740472, 0.0385017, 0.0234269};
-        // P2Planeicpodom.push_back(pose3);
-
-        // Pose pose4{-0.00329944, -0.0201241, 0.0798038, -0.0122456, 0.0271391, 0.0251893};
-        // P2Planeicpodom.push_back(pose4);
-
-        // Pose pose5{-0.00479472, -0.00503589, 0.174923, -0.0256337, 0.0334838, 0.0337447};
-        // P2Planeicpodom.push_back(pose5);
-
-        // Pose pose6{-0.00562331, 0.00511645, 0.273961, -0.0116604, 0.0303684, 0.0375823};
-        // P2Planeicpodom.push_back(pose6);
-
-        // Pose pose7{-0.00282406, 0.0102643, 0.369734, -0.00670362, 0.0211684, 0.0425526};
-        // P2Planeicpodom.push_back(pose7);
-
-        // Pose pose8{-0.00214864, 0.0208646, 0.461961, -0.00546412, 0.02349, 0.0442729};
-        // P2Planeicpodom.push_back(pose8);
-
-        // Pose pose9{-0.000268157, 0.0314976, 0.551501, 0.00144077, 0.026887, 0.0415892};
-        // P2Planeicpodom.push_back(pose9);
-
-        // Pose pose10{-0.00470946, 0.041262, 0.637264, 0.00989813, 0.0101196, 0.0330693};
-        // P2Planeicpodom.push_back(pose10);
-
-        P2Planeicpodom.push_back(pose_cur);
-
-        Pose pose2{1.67252e-05, 2.27332e-05, 4.47541e-05, -5.14029e-06, -9.11666e-05, 2.92134e-05};
-        P2Planeicpodom.push_back(pose2);
-
-        Pose pose3{1.15723e-05, 0.00989498, -0.0306775, -0.00104468, -0.00075599, -0.000941927};
-        P2Planeicpodom.push_back(pose3);
-
-        Pose pose4{0.00686914, -0.0171816, -0.0374703, -0.00224548, -0.00238489, 0.00275698};
-        P2Planeicpodom.push_back(pose4);
-
-        Pose pose5{-0.00343771, -0.0261886, -0.0381109, -0.00510077, -0.000924259, 0.00076695};
-        P2Planeicpodom.push_back(pose5);
-
-        Pose pose6{-0.00560499, -0.0387742, -0.0428296, -0.00486128, -0.00154344, 0.00210947};
-        P2Planeicpodom.push_back(pose6);
-
-        Pose pose7{-0.00676588, -0.0430711, -0.0466957, -0.00499425, -0.00110349, 0.00117166};
-        P2Planeicpodom.push_back(pose7);
-
-        Pose pose8{-0.00628712, -0.0463263, -0.0458888, -0.00335517, -0.00116951, 0.00108462};
-        P2Planeicpodom.push_back(pose8);
-
-        Pose pose9{-0.00431829, -0.0357355, -0.0440597, -0.0021191, -0.00147641, 0.00197639};
-        P2Planeicpodom.push_back(pose9);
-
-        Pose pose10{0.00419107, -0.0327193, -0.0452322, -0.00478576, -0.00183024, 0.00130376};
-        P2Planeicpodom.push_back(pose10);
-
         first_point = false;
         second_point = true;
         lidar_frame_count++;
         last_imu_ = meas.imu.back();
         odom.push_back(pose_cur);
         odom_no.push_back(pose_cur);
-        icp_result = pose_cur;
-        // icp_result = P2Planeicpodom[0];
-        // icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
+        if(usetrue){
+            oss.str("");
+            oss << std::fixed << std::setprecision(6) << meas.lidar_beg_time;
+            double normalizedDesiredTimestamp = std::stod(oss.str());
+            Pose pose_true = {poseMap.find(normalizedDesiredTimestamp)->second.x,
+                                poseMap.find(normalizedDesiredTimestamp)->second.y,
+                                poseMap.find(normalizedDesiredTimestamp)->second.z,
+                                poseMap.find(normalizedDesiredTimestamp)->second.roll,
+                                poseMap.find(normalizedDesiredTimestamp)->second.pitch,
+                                poseMap.find(normalizedDesiredTimestamp)->second.yaw};
+            Trueicpodom.push_back(pose_true);
+            cout<<"time:"<<normalizedDesiredTimestamp<<" "<<poseMap.find(normalizedDesiredTimestamp)->second.x<<endl;
+            icp_result = pose_true;
+        }else{
+            icp_result = pose_cur;
+        }
         CalibState calibState_first(icp_result.poseto_rotation(), icp_result.poseto_position(), meas.lidar_end_time);
         system_state.push_back(calibState_first);
         return 0;
@@ -503,8 +458,22 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state)
 
     pose_cur = pose_cur.addPoses(pose_cur, icp_trans);
     odom.push_back(pose_cur);
-    // icp_result = P2Planeicpodom[lidar_frame_count];
-    icp_result = pose_cur;
+    if(usetrue){
+        oss.str("");
+        oss << std::fixed << std::setprecision(6) << meas.lidar_beg_time;
+        double normalizedDesiredTimestamp = std::stod(oss.str());
+        Pose pose_true = {poseMap.find(normalizedDesiredTimestamp)->second.x,
+                            poseMap.find(normalizedDesiredTimestamp)->second.y,
+                            poseMap.find(normalizedDesiredTimestamp)->second.z,
+                            poseMap.find(normalizedDesiredTimestamp)->second.roll,
+                            poseMap.find(normalizedDesiredTimestamp)->second.pitch,
+                            poseMap.find(normalizedDesiredTimestamp)->second.yaw};
+        Trueicpodom.push_back(pose_true);
+        cout<<"time:"<<normalizedDesiredTimestamp<<" "<<poseMap.find(normalizedDesiredTimestamp)->second.x<<endl;
+        icp_result = pose_true;
+    }else{
+        icp_result = pose_cur;
+    }
     icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
     CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     calibState.pre_integration = tmp_pre_integration;

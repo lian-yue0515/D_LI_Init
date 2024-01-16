@@ -29,6 +29,7 @@
 #include <pcl/io/pcd_io.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
+#include <map>
 
 #define INIT_TIME           (0.1)
 #define LASER_POINT_COV     (0.001)
@@ -857,6 +858,24 @@ int main(int argc, char** argv)
     ros::Publisher pubPath          = nh.advertise<nav_msgs::Path> 
             ("/path", 100000);
 //------------------------------------------------------------------------------------------------------
+    std::string filePath;
+    nh.getParam("/file_path", filePath);
+    bool usetrue;
+    nh.getParam("/usetrue", usetrue);
+    std::ifstream Posefile(filePath);
+    if (!Posefile.is_open()) {
+        std::cerr << "Error opening file.\n";
+        return 1;
+    }
+    std::map<double, Pose> poseMap;
+    double timestamp;
+    Pose pose;
+    while (Posefile >> timestamp >> pose.x >> pose.y >> pose.z >> pose.roll >> pose.pitch >> pose.yaw) {
+        poseMap[timestamp] = pose;
+    }
+    Posefile.close();
+    cout << fixed << setprecision(6);
+    cout<<"poseMap size:"<<poseMap.size()<<endl;
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
     bool status = ros::ok();
@@ -877,7 +896,7 @@ int main(int argc, char** argv)
                     flg_first_scan = false;
                     continue;
                 }
-                if(dynamic_init->Data_processing(Measures, icp_state))
+                if(dynamic_init->Data_processing(Measures, icp_state, poseMap, usetrue))
                 {
                     if(!dynamic_init->Undistortpoint.empty() && !dynamic_init->Initialized_data.empty())
                     {
@@ -901,9 +920,13 @@ int main(int argc, char** argv)
                             cloudshowyuanshi->width = dynamic_init->Initialized_data[i].lidar->size();
                             std::string filenameyuanshi = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi_noodome"+ std::to_string(i)+ ".pcd";
                             pcl::io::savePCDFile(filenameyuanshi, *(cloudshowyuanshi));
-                            *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->P2Planeicpodom[i]);
+                            if(usetrue){
+                                *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->Trueicpodom[i]);
+                            }else{
+                                *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
+                            }
                             pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->icpodom_no[i]);
+                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
                             std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
                             pcl::io::savePCDFile(filename, *(cloudshow));
                         }
@@ -919,8 +942,13 @@ int main(int argc, char** argv)
                     state_init.ba = Zero3d;
                     state_init.offset_R_L_I = Lidar_R_wrt_IMU;
                     state_init.offset_T_L_I = Lidar_T_wrt_IMU;
-                    state_init.pos = Zero3d;
-                    state_init.rot = Eye3d;
+                    if(usetrue){
+                        state_init.pos = dynamic_init->system_state[0].T;
+                        state_init.rot = dynamic_init->system_state[0].R;
+                    }else{
+                        state_init.pos = Zero3d;
+                        state_init.rot = Eye3d;
+                    }
                     state_init.bg = dynamic_init->get_gyro_bias();
                     state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
                     state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
@@ -944,7 +972,7 @@ int main(int argc, char** argv)
 
         if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
             measures_num = measures_num + 1;
-            if( measures_num == dynamic_init->data_accum_length ) measures_num = 0;
+            if( measures_num == dynamic_init->data_accum_length+1 ) measures_num = 0;
             Measures = dynamic_init->Initialized_data[measures_num];
             data_alignment = 1;
         } else {
@@ -960,10 +988,6 @@ int main(int argc, char** argv)
                 cloudshowfastlio->width = feats_undistort->points.size();
                 std::string fastliopcl = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/fastlio/fastliopcl"+ std::to_string(measures_num)+ ".pcd";
                 pcl::io::savePCDFile(fastliopcl, *cloudshowfastlio);
-            }
-            if (flg_first_scan)
-            {
-                flg_first_scan = false;
             }
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
@@ -1045,8 +1069,8 @@ int main(int argc, char** argv)
             pose_cur.roll = roll;
             pose_cur.pitch = pitch;
             pose_cur.yaw = yaw;
-            dynamic_init->system_state[measures_num+1].R = pose_cur.poseto_rotation();
-            dynamic_init->system_state[measures_num+1].T = pose_cur.poseto_position();
+            dynamic_init->system_state[measures_num].R = pose_cur.poseto_rotation();
+            dynamic_init->system_state[measures_num].T = pose_cur.poseto_position();
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
             /*** add the feature points to map kdtree ***/
@@ -1055,7 +1079,7 @@ int main(int argc, char** argv)
             if (path_en)                         publish_path(pubPath);                      
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
-            if(measures_num == dynamic_init->data_accum_length - 1){
+            if(measures_num == dynamic_init->data_accum_length){
                 if(!dynamic_init->dynamic_init_fished){
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
@@ -1071,8 +1095,13 @@ int main(int argc, char** argv)
                     state_init.ba = Zero3d;
                     state_init.offset_R_L_I = Lidar_R_wrt_IMU;
                     state_init.offset_T_L_I = Lidar_T_wrt_IMU;
-                    state_init.pos = Zero3d;
-                    state_init.rot = Eye3d;
+                    if(usetrue){
+                        state_init.pos = dynamic_init->system_state[0].T;
+                        state_init.rot = dynamic_init->system_state[0].R;
+                    }else{
+                        state_init.pos = Zero3d;
+                        state_init.rot = Eye3d;
+                    }
                     state_init.bg = dynamic_init->get_gyro_bias();
                     state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
                     state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();

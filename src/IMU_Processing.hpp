@@ -389,18 +389,20 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
             dt = head->header.stamp.toSec() - tail->header.stamp.toSec();
         
         M3D Exp_f  = Exp(angvel_avr, dt);
-
-        /* propagation of IMU attitude (global frame)*/
-        R_imu = R_imu * Exp_f.transpose();
-
+        
         /* Specific acceleration (global frame) of IMU */
         acc_imu = R_imu * acc_avr + V3D(imu_state.grav);
+
+        /* velocity of IMU (global frame)*/
+        vel_imu = vel_imu - acc_imu * dt;
 
         /* propagation of IMU position (global frame)*/
         pos_imu = pos_imu - vel_imu * dt - 0.5 * acc_imu * dt * dt;
 
-        /* velocity of IMU (global frame)*/
-        vel_imu = vel_imu - acc_imu * dt;
+        /* propagation of IMU attitude (global frame)*/
+        R_imu = R_imu * Exp_f.transpose();
+
+
 
         /* save the poses at each IMU measurements (global frame)*/
         angvel_last = angvel_avr;

@@ -67,7 +67,7 @@ public:
     vector<GYR_> GYR_pose;
     vector<Pose> icpodom;
     vector<Pose> icpodom_no;
-    vector<Pose> P2Planeicpodom;
+    vector<Pose> Trueicpodom;
     vector<Pose> odom;
     vector<Pose> odom_no;
     vector<MeasureGroup> Initialized_data;
@@ -92,7 +92,7 @@ public:
     void RefineGravity_withoutba(StatesGroup icp_state, Vector3d &g, VectorXd &x);
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                             const double &move_start_time);
-    bool Data_processing(MeasureGroup& meas, StatesGroup &icp_state);
+    bool Data_processing(MeasureGroup& meas, StatesGroup &icp_state, std::map<double, Pose> &poseMap, bool usetrue);
     void Data_propagate();
     void clear();
     void print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0);
