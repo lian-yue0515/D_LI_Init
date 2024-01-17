@@ -6,7 +6,7 @@
 
 	<param name="feature_extract_enable" type="bool" value="0"/>
 	<param name="point_filter_num" type="int" value="1"/>
-	<param name="max_iteration" type="int" value="3" />
+	<param name="max_iteration" type="int" value="10" />
 	<param name="filter_size_surf" type="double" value="0.05" />
 	<param name="filter_size_map" type="double" value="0.05" />
 	<param name="cube_side_length" type="double" value="1000" />
@@ -15,7 +15,7 @@
 	<!-- <param name="file_path" type="str" value="/media/myx/Study/FAST_LIO_ws/src/FAST_LIO/Log/fout_true_hit1.txt"/> -->
 	<param name="file_path" type="str" value="/media/myx/Study/FAST_LIO_ws/src/FAST_LIO/Log/fout_true_deseq01.txt"/>
 	<!-- <param name="file_path" type="str" value="/media/myx/Study/FAST_LIO_ws/src/FAST_LIO/Log/fout_true_de2103.txt"/> -->
-	<param name="usetrue" type="bool" value="1" />
+	<param name="usetrue" type="bool" value="0" />
 
     <node pkg="lidar_dynamic_init" type="dynamic_init" name="laserinit" output="screen" /> 
 

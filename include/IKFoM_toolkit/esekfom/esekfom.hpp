@@ -1831,7 +1831,7 @@ public:
 				dyn_share.converge = true;
 			}
 
-			if(t > 1 || i == maximum_iter - 1)
+			if(t > 5 || i == maximum_iter - 1)
 			{
 				L_ = P_;
 				//std::cout << "iteration time" << t << "," << i << std::endl; 
