@@ -356,7 +356,6 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
     const double &pcl_end_time = meas.lidar_end_time;
 
     pcl_out = *(meas.lidar);
-    cout<<"point_pre"<<pcl_out.size()<<endl;
     sort(pcl_out.points.begin(), pcl_out.points.end(), time_list);
 
     state_ikfom imu_state = kf_state.get_x();
@@ -386,7 +385,7 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
         if(head->header.stamp.toSec() > pcl_end_time)
             dt = pcl_end_time - tail->header.stamp.toSec();
         else
-            dt = head->header.stamp.toSec() - tail->header.stamp.toSec();
+            dt = tail->header.stamp.toSec() - head->header.stamp.toSec();
         
         M3D Exp_f  = Exp(angvel_avr, dt);
         
@@ -416,7 +415,7 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
     double note = pcl_beg_time > imu_beg_time ? 1.0 : -1.0;
     dt = note * (pcl_beg_time - imu_beg_time);
     V3D vel_end = vel_imu - note * acc_imu * dt;
-    M3D rot_end = R_imu * (Exp(V3D(note * angvel_avr), dt)).transpose();
+    M3D rot_end = R_imu * (Exp(V3D(note * angvel_avr), dt));
     V3D pos_end = pos_imu - note * vel_imu * dt - note * 0.5 * acc_imu * dt * dt;
     cout<<"pos_end_back: "<<pos_end.transpose()<<endl;
     cout<<"vel_end_back: "<<vel_end.transpose()<<endl;
@@ -424,7 +423,6 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
     {
         V3D acc_imu_, angvel_avr_, acc_avr_, vel_imu_(vel_end), pos_imu_(pos_end);
         M3D R_imu_(rot_end);
-
         double dt = 0;
         for (auto it_imu = v_imu.begin(); it_imu < (v_imu.end() - 1); it_imu++)
         {
@@ -515,7 +513,6 @@ void ImuProcess::UndistortPcl_first(const MeasureGroup &meas, esekfom::esekf<sta
                 break;
         }
     }
-    cout<<"point_after"<<pcl_out.size()<<endl;
 }
 
 void ImuProcess::Process(const MeasureGroup &meas,
@@ -563,8 +560,8 @@ void ImuProcess::Process(const MeasureGroup &meas,
             UndistortPcl_forfirst = firstundistort;
             if(UndistortPcl_forfirst){
                 cout<<"first!"<<endl;
-                // UndistortPcl_first(meas, kf_state, *cur_pcl_un_);
-                *cur_pcl_un_ = *meas.lidar;
+                UndistortPcl_first(meas, kf_state, *cur_pcl_un_);
+                // *cur_pcl_un_ = *meas.lidar;
             }
         }
         return;

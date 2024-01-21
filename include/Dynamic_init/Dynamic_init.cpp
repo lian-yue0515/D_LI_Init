@@ -95,7 +95,7 @@ Pose doICP(pcl::PointCloud<PointType>::Ptr cureKeyframeCloud, pcl::PointCloud<Po
     icp.setMaximumIterations(50);
     icp.setTransformationEpsilon(1e-6);
     icp.setEuclideanFitnessEpsilon(1e-6);
-    icp.setRANSACIterations(5);
+    icp.setRANSACIterations(1);
     // Align pointclouds 
     icp.setInputSource(sourcePtr);
     icp.setInputTarget(targetPtr);
@@ -115,7 +115,6 @@ Pose doICP(pcl::PointCloud<PointType>::Ptr cureKeyframeCloud, pcl::PointCloud<Po
     correctionLidarFrame = icp.getFinalTransformation();
     pcl::getTranslationAndEulerAngles (correctionLidarFrame, x, y, z, roll, pitch, yaw);
     return Pose{x, y, z, roll, pitch, yaw};
-
 } 
 
 Pose ParemidICP(pcl::PointCloud<PointType>::Ptr cureKeyframeCloud, pcl::PointCloud<PointType>::Ptr targetKeyframeCloud)
@@ -171,6 +170,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
         last_imu_ = meas.imu.back();
         odom.push_back(pose_cur);
         odom_no.push_back(pose_cur);
+        odom_Paremi.push_back(pose_cur);
         if(usetrue){
             oss.str("");
             oss << std::fixed << std::setprecision(6) << meas.lidar_beg_time;
@@ -384,7 +384,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
     Pose pose_diff = pose_prediction.diffpose(pose_initial);
     pcl::PointCloud<PointType>::Ptr Pointscloud_near = Pointscloud_trans(Undistortpoint.back(), pose_diff);
     cout<<endl<<"--------------------------"<<endl;
-    Pose icp_trans = pose_diff.addPoses(pose_diff, ParemidICP(Pointscloud_near, Undistortpoint[Undistortpoint.size()-2]));
+    Pose icp_trans = pose_diff.addPoses(pose_diff, doICP(Pointscloud_near, Undistortpoint[Undistortpoint.size()-2]));
     pose_cur = pose_cur.addPoses(pose_cur, icp_trans);
     odom.push_back(pose_cur);
     if(usetrue){
@@ -413,7 +413,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
     cout<<"------------------ICP-----------------------"<<endl;
     pose_cur_no = pose_cur_no.addPoses(pose_cur_no, doICP(Initialized_data.back().lidar, Initialized_data[Initialized_data.size()-2].lidar));
     odom_no.push_back(pose_cur_no);
-    // icp_result = pose_cur_no;
+    // icp_result = pose_cur_Paremi;
     // icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
     // CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     // calibState.pre_integration = tmp_pre_integration;
