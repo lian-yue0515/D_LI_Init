@@ -117,7 +117,11 @@ struct StatesGroup
         this->bias_a  = Zero3d;
         this->gravity = Zero3d;
 	};
-
+    void set_extrinsic(const V3D &transl, const M3D &rot)
+    {
+        this->offset_T_L_I = transl;
+        this->offset_R_L_I = rot;
+    }
     StatesGroup(const StatesGroup& b) {
 		this->rot_end = b.rot_end;
 		this->pos_end = b.pos_end;

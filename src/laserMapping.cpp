@@ -816,6 +816,7 @@ int main(int argc, char** argv)
 
     Lidar_T_wrt_IMU<<VEC_FROM_ARRAY(extrinT);
     Lidar_R_wrt_IMU<<MAT_FROM_ARRAY(extrinR);
+    icp_state.set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
     p_imu->set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
     p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
     p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
@@ -861,21 +862,25 @@ int main(int argc, char** argv)
     std::string filePath;
     nh.getParam("/file_path", filePath);
     bool usetrue;
+    bool direct;
     nh.getParam("/usetrue", usetrue);
-    std::ifstream Posefile(filePath);
-    if (!Posefile.is_open()) {
-        std::cerr << "Error opening file.\n";
-        return 1;
-    }
+    nh.getParam("/direct", direct);
     std::map<double, Pose> poseMap;
     double timestamp;
-    Pose pose;
-    while (Posefile >> timestamp >> pose.x >> pose.y >> pose.z >> pose.roll >> pose.pitch >> pose.yaw) {
-        poseMap[timestamp] = pose;
+    if(usetrue){
+        std::ifstream Posefile(filePath);
+        if (!Posefile.is_open()) {
+            std::cerr << "Error opening file.\n";
+            return 1;
+        }
+        Pose pose;
+        while (Posefile >> timestamp >> pose.x >> pose.y >> pose.z >> pose.roll >> pose.pitch >> pose.yaw) {
+            poseMap[timestamp] = pose;
+        }
+        Posefile.close();
+        cout << fixed << setprecision(6);
+        cout<<"poseMap size:"<<poseMap.size()<<endl;
     }
-    Posefile.close();
-    cout << fixed << setprecision(6);
-    cout<<"poseMap size:"<<poseMap.size()<<endl;
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
     bool status = ros::ok();
@@ -972,7 +977,7 @@ int main(int argc, char** argv)
 
         if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
             measures_num = measures_num + 1;
-            if( measures_num == dynamic_init->data_accum_length+1 ) measures_num = 0;
+            if( measures_num == dynamic_init->data_accum_length + 1) measures_num = 0;
             Measures = dynamic_init->Initialized_data[measures_num];
             data_alignment = 1;
         } else {
@@ -1079,6 +1084,7 @@ int main(int argc, char** argv)
             if (path_en)                         publish_path(pubPath);                      
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
+            if(usetrue && direct){dynamic_init->dynamic_init_fished = true;}else{
             if(measures_num == dynamic_init->data_accum_length){
                 if(!dynamic_init->dynamic_init_fished){
                     dynamic_init->solve_Rot_bias_gyro();
@@ -1118,13 +1124,11 @@ int main(int argc, char** argv)
                     p_imu->Dynamic_init = true;
                     p_imu->Reset();
                     ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
-                    std::chrono::milliseconds delayDuration(5);
-                    std::this_thread::sleep_for(delayDuration);
                     flg_first_scan = true;
                     feats_undistort == NULL;
-
                     // return 0;
                 }
+            }
             }
         }
 

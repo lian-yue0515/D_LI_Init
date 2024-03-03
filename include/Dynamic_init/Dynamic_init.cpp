@@ -121,16 +121,16 @@ Pose ParemidICP(pcl::PointCloud<PointType>::Ptr cureKeyframeCloud, pcl::PointClo
 {
     pcl::PointCloud<PointType>::Ptr sourcePtr_05 (new pcl::PointCloud<PointType>);
     pcl::PointCloud<PointType>::Ptr targetPtr_05 (new pcl::PointCloud<PointType>);
-    voxel_filter(cureKeyframeCloud, sourcePtr_05, 0.5);
-    voxel_filter(targetKeyframeCloud, targetPtr_05, 0.5);
+    voxel_filter(cureKeyframeCloud, sourcePtr_05, 1);
+    voxel_filter(targetKeyframeCloud, targetPtr_05, 1);
     Pose pose_05 = doICP(sourcePtr_05, targetPtr_05);
 
 
     pcl::PointCloud<PointType>::Ptr sourcePtr_01 (new pcl::PointCloud<PointType>);
     pcl::PointCloud<PointType>::Ptr targetPtr_01 (new pcl::PointCloud<PointType>);
     sourcePtr_01 = Pointscloud_trans(cureKeyframeCloud, pose_05);
-    voxel_filter(sourcePtr_01, sourcePtr_01, 0.1);
-    voxel_filter(targetKeyframeCloud, targetPtr_01, 0.1);
+    voxel_filter(sourcePtr_01, sourcePtr_01, 0.5);
+    voxel_filter(targetKeyframeCloud, targetPtr_01, 0.5);
     Pose pose_01 = pose_05.addPoses(pose_05, doICP(sourcePtr_01, targetPtr_01));
 
     pcl::PointCloud<PointType>::Ptr sourcePtr_00 (new pcl::PointCloud<PointType>);
@@ -142,7 +142,7 @@ Pose ParemidICP(pcl::PointCloud<PointType>::Ptr cureKeyframeCloud, pcl::PointClo
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 10;
+    data_accum_length = 20;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
@@ -168,6 +168,12 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
         second_point = true;
         lidar_frame_count++;
         last_imu_ = meas.imu.back();
+        acc_0.x() = meas.imu.back()->linear_acceleration.x;
+        acc_0.y() = meas.imu.back()->linear_acceleration.y;
+        acc_0.z() = meas.imu.back()->linear_acceleration.z;
+        gyr_0.x() = meas.imu.back()->angular_velocity.x;
+        gyr_0.y() = meas.imu.back()->angular_velocity.y;
+        gyr_0.z() = meas.imu.back()->angular_velocity.z;
         odom.push_back(pose_cur);
         odom_no.push_back(pose_cur);
         odom_Paremi.push_back(pose_cur);
@@ -384,7 +390,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
     Pose pose_diff = pose_prediction.diffpose(pose_initial);
     pcl::PointCloud<PointType>::Ptr Pointscloud_near = Pointscloud_trans(Undistortpoint.back(), pose_diff);
     cout<<endl<<"--------------------------"<<endl;
-    Pose icp_trans = pose_diff.addPoses(pose_diff, doICP(Pointscloud_near, Undistortpoint[Undistortpoint.size()-2]));
+    Pose icp_trans = pose_diff.addPoses(pose_diff, ParemidICP(Pointscloud_near, Undistortpoint[Undistortpoint.size()-2]));
     pose_cur = pose_cur.addPoses(pose_cur, icp_trans);
     odom.push_back(pose_cur);
     if(usetrue){
