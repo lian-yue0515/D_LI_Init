@@ -135,14 +135,18 @@ Pose ParemidICP(pcl::PointCloud<PointType>::Ptr cureKeyframeCloud, pcl::PointClo
 
     pcl::PointCloud<PointType>::Ptr sourcePtr_00 (new pcl::PointCloud<PointType>);
     sourcePtr_00 = Pointscloud_trans(cureKeyframeCloud, pose_01);
-    Pose pose = pose_01.addPoses(pose_01, doICP(sourcePtr_00, targetKeyframeCloud));
+    pcl::PointCloud<PointType>::Ptr sourcePtr_005 (new pcl::PointCloud<PointType>);
+    pcl::PointCloud<PointType>::Ptr targetPtr_005 (new pcl::PointCloud<PointType>);
+    voxel_filter(sourcePtr_00, sourcePtr_005, 0.1);
+    voxel_filter(targetKeyframeCloud, targetPtr_005, 0.1);
+    Pose pose = pose_01.addPoses(pose_01, doICP(sourcePtr_005, targetPtr_005));
     return pose;
 }
 
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 20;
+    data_accum_length = 10;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;
@@ -413,12 +417,12 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
     CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     calibState.pre_integration = tmp_pre_integration;
     system_state.push_back(calibState);
-    cout<<"------------------ParemidICP-----------------------"<<endl;
-    pose_cur_Paremi = pose_cur_Paremi.addPoses(pose_cur_Paremi, ParemidICP(Initialized_data.back().lidar, Initialized_data[Initialized_data.size()-2].lidar));
-    odom_Paremi.push_back(pose_cur_Paremi);
-    cout<<"------------------ICP-----------------------"<<endl;
-    pose_cur_no = pose_cur_no.addPoses(pose_cur_no, doICP(Initialized_data.back().lidar, Initialized_data[Initialized_data.size()-2].lidar));
-    odom_no.push_back(pose_cur_no);
+    // cout<<"------------------ParemidICP-----------------------"<<endl;
+    // pose_cur_Paremi = pose_cur_Paremi.addPoses(pose_cur_Paremi, ParemidICP(Initialized_data.back().lidar, Initialized_data[Initialized_data.size()-2].lidar));
+    // odom_Paremi.push_back(pose_cur_Paremi);
+    // cout<<"------------------ICP-----------------------"<<endl;
+    // pose_cur_no = pose_cur_no.addPoses(pose_cur_no, doICP(Initialized_data.back().lidar, Initialized_data[Initialized_data.size()-2].lidar));
+    // odom_no.push_back(pose_cur_no);
     // icp_result = pose_cur_Paremi;
     // icp_result.addtrans_left(icp_state.offset_R_L_I, icp_state.offset_T_L_I);
     // CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);

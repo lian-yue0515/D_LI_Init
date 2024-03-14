@@ -141,7 +141,7 @@ public:
         delta_p = result_delta_p;
         delta_q = result_delta_q;
         delta_v = result_delta_v;
-        linearized_ba = result_linearized_ba;
+        linearized_ba = result_linearized_ba; 
         linearized_bg = result_linearized_bg;
         delta_q.normalize();
         sum_dt += dt;

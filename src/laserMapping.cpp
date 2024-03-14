@@ -863,8 +863,11 @@ int main(int argc, char** argv)
     nh.getParam("/file_path", filePath);
     bool usetrue;
     bool direct;
+    int Iteration_NUM;
     nh.getParam("/usetrue", usetrue);
     nh.getParam("/direct", direct);
+    nh.getParam("/Iteration_NUM", Iteration_NUM);
+    nh.getParam("/Data_accum_length", dynamic_init->data_accum_length);
     std::map<double, Pose> poseMap;
     double timestamp;
     if(usetrue){
@@ -885,7 +888,7 @@ int main(int argc, char** argv)
     ros::Rate rate(5000);
     bool status = ros::ok();
     int count = 0;
-    
+    int iteration_num = 0;
     int measures_num = -1;
     bool data_alignment = 0;
     while (status)
@@ -928,14 +931,14 @@ int main(int argc, char** argv)
                             if(usetrue){
                                 *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->Trueicpodom[i]);
                             }else{
-                                *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
+                                // *cloudshowyuanshi_no += *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_no[i]);
                             }
-                            pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                            *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_Paremi[i]);
-                            std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
-                            pcl::io::savePCDFile(filename, *(cloudshow));
+                            // pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                            // *cloudshow = *local2global(dynamic_init->Initialized_data[i].lidar, dynamic_init->odom_Paremi[i]);
+                            // std::string filename = "/home/myx/fighting/dynamic_init_lidar_inertial/src/LiDAR_DYNAMIC_INIT/PCD/yuanshi"+ std::to_string(i)+ ".pcd";
+                            // pcl::io::savePCDFile(filename, *(cloudshow));
                         }
-                        pcl::io::savePCDFile(filenameyuanshi_no, *(cloudshowyuanshi_no));
+                        // pcl::io::savePCDFile(filenameyuanshi_no, *(cloudshowyuanshi_no));
                         
                     }
                     dynamic_init->Data_processing_fished = true;
@@ -1081,10 +1084,12 @@ int main(int argc, char** argv)
             /*** add the feature points to map kdtree ***/
             map_incremental();
             /******* Publish points *******/
+            if(dynamic_init->dynamic_init_fished){
             if (path_en)                         publish_path(pubPath);                      
             if (scan_pub_en || pcd_save_en)      publish_frame_world(pubLaserCloudFull);
             if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
-            if(usetrue && direct){dynamic_init->dynamic_init_fished = true;}else{
+            }
+            if(usetrue || direct){dynamic_init->dynamic_init_fished = true;}else{
             if(measures_num == dynamic_init->data_accum_length){
                 if(!dynamic_init->dynamic_init_fished){
                     dynamic_init->solve_Rot_bias_gyro();
@@ -1092,10 +1097,11 @@ int main(int argc, char** argv)
                     dynamic_init->LinearAlignment_withoutba(icp_state, x_);
                     current_g = dynamic_init->get_g();
                 }
-                if(abs(Last_g-current_g) < 0.001)
+                if(abs(Last_g-current_g) < 0.001 || iteration_num == Iteration_NUM)
                 {
                     dynamic_init->dynamic_init_fished = true;
                 }else{
+                    iteration_num ++;
                     Last_g  = current_g;
                     state_ikfom state_init = kf.get_x();
                     state_init.ba = Zero3d;

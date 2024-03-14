@@ -1,11 +1,13 @@
 common:
+    # lid_topic:  "/os1_cloud_node1/points"
+    # imu_topic:  "/os1_cloud_node1/imu"
     lid_topic:  "/os_cloud_node/points"
     imu_topic:  "/os_cloud_node/imu"
     time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
     
 preprocess:
     lidar_type: 3                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
-    scan_line: 128
+    scan_line: 64
     blind: 4
     mean_acc_norm: 9.805
 
@@ -17,8 +19,9 @@ mapping:
     fov_degree:    180
     det_range:     150.0
     extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic
-    # extrinsic_T: [ 0.014, -0.012, -0.015 ]
-    extrinsic_T: [ 0, 0, 0 ]
+    extrinsic_T: [ 0.014, -0.012, -0.015 ]  
+    # extrinsic_T: [ -0.05, 0, 0.055 ]
+
 
     extrinsic_R: [1, 0, 0,
                   0, 1, 0,
