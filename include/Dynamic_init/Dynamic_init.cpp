@@ -166,6 +166,7 @@ void Dynamic_init::clear() {
 
 bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, std::map<double, Pose> &poseMap, bool usetrue)
 {
+    std::chrono::steady_clock::time_point Data_begin = std::chrono::steady_clock::now();
     Initialized_data.push_back(meas);
     if(first_point){
         first_point = false;
@@ -394,7 +395,11 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
     Pose pose_diff = pose_prediction.diffpose(pose_initial);
     pcl::PointCloud<PointType>::Ptr Pointscloud_near = Pointscloud_trans(Undistortpoint.back(), pose_diff);
     cout<<endl<<"--------------------------"<<endl;
+    std::chrono::steady_clock::time_point Icp_begin = std::chrono::steady_clock::now();
     Pose icp_trans = pose_diff.addPoses(pose_diff, ParemidICP(Pointscloud_near, Undistortpoint[Undistortpoint.size()-2]));
+    std::chrono::steady_clock::time_point Icp_end = std::chrono::steady_clock::now();
+    double icp_time = chrono::duration_cast<chrono::duration<double> >(Icp_end - Icp_begin).count();
+    cout<<"icp need time : "<< icp_time <<endl;
     pose_cur = pose_cur.addPoses(pose_cur, icp_trans);
     odom.push_back(pose_cur);
     if(usetrue){
@@ -428,6 +433,9 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
     // CalibState calibState(icp_result.poseto_rotation(), icp_result.poseto_position(), pcl_end_time);
     // calibState.pre_integration = tmp_pre_integration;
     // system_state.push_back(calibState);
+    std::chrono::steady_clock::time_point Data_end = std::chrono::steady_clock::now();
+    double data_time = chrono::duration_cast<chrono::duration<double> >(Data_end - Data_begin).count();
+    cout<<"data_processing need time : "<< data_time <<endl;
     icp_state.rot_end = pose_cur.poseto_rotation();
     icp_state.pos_end = pose_cur.poseto_position();
     if (lidar_frame_count < data_accum_length)

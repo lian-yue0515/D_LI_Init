@@ -769,8 +769,8 @@ int main(int argc, char** argv)
     nh.param<string>("common/imu_topic", imu_topic,"/livox/imu");
     nh.param<bool>("common/time_sync_en", time_sync_en, false);
     nh.param<double>("filter_size_corner",filter_size_corner_min,0.6);
-    nh.param<double>("filter_size_surf",filter_size_surf_min,0.05);
-    nh.param<double>("filter_size_map",filter_size_map_min,0.05);
+    nh.param<double>("filter_size_surf",filter_size_surf_min,0.3);
+    nh.param<double>("filter_size_map",filter_size_map_min,0.3);
     nh.param<double>("cube_side_length",cube_len,200);
     nh.param<float>("mapping/det_range",DET_RANGE,300.f);
     nh.param<double>("mapping/fov_degree",fov_deg,180);
@@ -895,6 +895,7 @@ int main(int argc, char** argv)
     {
         if (flg_exit) break;
         ros::spinOnce();
+        std::chrono::steady_clock::time_point iterator_begin;
         if(!dynamic_init->Data_processing_fished){
             if(sync_packages(Measures)) {
                 if (flg_first_scan)
@@ -942,9 +943,16 @@ int main(int argc, char** argv)
                         
                     }
                     dynamic_init->Data_processing_fished = true;
+                    std::chrono::steady_clock::time_point Solve_begin = std::chrono::steady_clock::now();
+                    double t1 = omp_get_wtime();
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
                     dynamic_init->LinearAlignment_withoutba(icp_state, x_);
+                    std::chrono::steady_clock::time_point Solve_end = std::chrono::steady_clock::now();
+                    double t2 = omp_get_wtime();
+                    double solve_time = chrono::duration_cast<chrono::duration<double> >(Solve_end - Solve_begin).count();
+                    cout<<"solve need time : "<< solve_time <<endl;
+                    cout<<"solve need time : "<< (t2 - t1) <<endl;
                     Last_g = dynamic_init->get_g();
                     state_ikfom state_init = kf.get_x();
                     state_init.ba = Zero3d;
@@ -975,6 +983,7 @@ int main(int argc, char** argv)
                     flg_first_scan = true;
                     feats_undistort == NULL;
                 }else{continue;}
+                iterator_begin = std::chrono::steady_clock::now();
             }
         }
 
@@ -1091,6 +1100,9 @@ int main(int argc, char** argv)
             }
             if(usetrue || direct){dynamic_init->dynamic_init_fished = true;}else{
             if(measures_num == dynamic_init->data_accum_length){
+                std::chrono::steady_clock::time_point iterator_end = std::chrono::steady_clock::now();
+                double iterator_time = chrono::duration_cast<chrono::duration<double>>(iterator_end - iterator_begin).count();
+                cout<<"iterator need time : "<< iterator_time <<endl;
                 if(!dynamic_init->dynamic_init_fished){
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
