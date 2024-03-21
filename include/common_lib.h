@@ -5,83 +5,63 @@
 #include <Eigen/Eigen>
 #include <pcl/point_types.h>
 #include <pcl/point_cloud.h>
-#include <lidar_dynamic_init/Pose6D.h>
+#include <lidar_imu_init/States.h>
+#include <lidar_imu_init/Pose6D.h>
 #include <sensor_msgs/Imu.h>
 #include <nav_msgs/Odometry.h>
 #include <tf/transform_broadcaster.h>
 #include <eigen_conversions/eigen_msg.h>
 #include <color.h>
 #include <scope_timer.hpp>
-#include <pcl/common/transforms.h>
+
+#include <tr1/unordered_map>
+// robin map
+#include "tsl/robin_map.h"
+
+#include "sophus/se3.hpp"
+#include "sophus/interpolate.hpp"
 
 using namespace std;
 using namespace Eigen;
 
-#define USE_IKFOM
-
+#define PBSTR "||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||"
+#define PBWIDTH 30
 #define PI_M (3.14159265358)
-#define G_m_s2 (9.81)         // Gravaty const in GuangDong/China
-#define DIM_STATE (18)        // Dimension of states (Let Dim(SO(3)) = 3)
-#define DIM_PROC_N (12)       // Dimension of process noise (Let Dim(SO(3)) = 3)
-#define CUBE_LEN  (6.0)
+#define G_m_s2 (9.81)         // Gravity const in GuangDong/China
+#define DIM_STATE (24)      // Dimension of states (Let Dim(SO(3)) = 3)
+
 #define LIDAR_SP_LEN    (2)
 #define INIT_COV   (1)
 #define NUM_MATCH_POINTS    (5)
-#define MAX_MEAS_DIM        (10000)
 
 #define VEC_FROM_ARRAY(v)        v[0],v[1],v[2]
 #define MAT_FROM_ARRAY(v)        v[0],v[1],v[2],v[3],v[4],v[5],v[6],v[7],v[8]
-#define CONSTRAIN(v,min,max)     ((v>min)?((v<max)?v:max):min)
-#define ARRAY_FROM_EIGEN(mat)    mat.data(), mat.data() + mat.rows() * mat.cols()
-#define STD_VEC_FROM_EIGEN(mat)  vector<decltype(mat)::Scalar> (mat.data(), mat.data() + mat.rows() * mat.cols())
+
 #define DEBUG_FILE_DIR(name)     (string(string(ROOT_DIR) + "Log/"+ name))
+#define RESULT_FILE_DIR(name)    (string(string(ROOT_DIR) + "result/"+ name))
 
-typedef lidar_dynamic_init::Pose6D Pose6D;
-
+typedef lidar_imu_init::Pose6D     Pose6D;
 typedef pcl::PointXYZINormal PointType;
-typedef pcl::PointCloud<PointType> PointCloudXYZI;
+typedef pcl::PointXYZRGB     PointTypeRGB;
+typedef pcl::PointCloud<PointType>    PointCloudXYZI;
+typedef pcl::PointCloud<PointTypeRGB> PointCloudXYZRGB;
 typedef vector<PointType, Eigen::aligned_allocator<PointType>>  PointVector;
 typedef Vector3d V3D;
 typedef Matrix3d M3D;
-using M9D = Eigen::Matrix<double, 9, 9>;
-using M6D = Eigen::Matrix<double, 6, 6>;
 typedef Vector3f V3F;
-typedef Matrix3f M3F;
 
 #define MD(a,b)  Matrix<double, (a), (b)>
 #define VD(a)    Matrix<double, (a), 1>
-#define MF(a,b)  Matrix<float, (a), (b)>
-#define VF(a)    Matrix<float, (a), 1>
 
 const M3D Eye3d(M3D::Identity());
-const M3F Eye3f(M3F::Identity());
 const V3D Zero3d(0, 0, 0);
-const V3D E3d(1, 1, 1);
-const V3F Zero3f(0, 0, 0);
 
+// Vector3d Lidar_offset_to_IMU(0.05512, 0.02226, -0.0297); // Horizon
+// Vector3d Lidar_offset_to_IMU(0.04165, 0.02326, -0.0284); // Avia
 
-extern double ACC_N, ACC_W;
-extern double GYR_N, GYR_W;
-extern Eigen::Vector3d G;
+enum LID_TYPE{AVIA = 1, VELO, OUSTER, L515, PANDAR, ROBOSENSE}; //{1, 2, 3}
 
-class Utility
-{
-public:
-    template <typename Derived>
-    static Eigen::Quaternion<typename Derived::Scalar> deltaQ(const Eigen::MatrixBase<Derived> &theta)
-    {
-        typedef typename Derived::Scalar Scalar_t;
-
-        Eigen::Quaternion<Scalar_t> dq;
-        Eigen::Matrix<Scalar_t, 3, 1> half_theta = theta;
-        half_theta /= static_cast<Scalar_t>(2.0);
-        dq.w() = static_cast<Scalar_t>(1.0);
-        dq.x() = half_theta.x();
-        dq.y() = half_theta.y();
-        dq.z() = half_theta.z();
-        return dq;
-    }
-};
+enum POINT_TYPE{RAW = 1, UNDISTORT, WORLD};
 struct GYR_{
     GYR_(){
         rot.Identity();
@@ -92,19 +72,20 @@ struct GYR_{
     M3D rot;
     double offset_time;
 };
-struct MeasureGroup     // Lidar data and imu dates for the curent process
-{
-    MeasureGroup()
-    {
-        lidar_beg_time = 0.0;
-        this->lidar.reset(new PointCloudXYZI());
-    };
-    double lidar_beg_time;
-    double lidar_end_time;
-    PointCloudXYZI::Ptr lidar;
-    deque<sensor_msgs::Imu::ConstPtr> imu;
-};
 
+template<typename T>
+auto imu_accumulative(const double t, const Matrix<T, 3, 1> &g, \
+                const Matrix<T, 3, 3> &R)
+{
+    GYR_ rot_kp;
+    rot_kp.offset_time = t;
+    for (int i = 0; i < 3; i++)
+    {
+        rot_kp.angvel[i] = g(i);
+        for (int j = 0; j < 3; j++)  rot_kp.rot(i, j) = R(i,j);
+    }
+    return move(rot_kp);
+}
 struct StatesGroup
 {
     StatesGroup() {
@@ -116,12 +97,10 @@ struct StatesGroup
         this->bias_g  = Zero3d;
         this->bias_a  = Zero3d;
         this->gravity = Zero3d;
+        this->cov     = MD(DIM_STATE,DIM_STATE)::Identity() * INIT_COV;
+        this->cov.block<9,9>(15,15) = MD(9,9)::Identity() * 0.00001;
 	};
-    void set_extrinsic(const V3D &transl, const M3D &rot)
-    {
-        this->offset_T_L_I = transl;
-        this->offset_R_L_I = rot;
-    }
+
     StatesGroup(const StatesGroup& b) {
 		this->rot_end = b.rot_end;
 		this->pos_end = b.pos_end;
@@ -131,6 +110,7 @@ struct StatesGroup
         this->bias_g  = b.bias_g;
         this->bias_a  = b.bias_a;
         this->gravity = b.gravity;
+        this->cov     = b.cov;
 	};
 
     StatesGroup& operator=(const StatesGroup& b)
@@ -143,6 +123,7 @@ struct StatesGroup
         this->bias_g  = b.bias_g;
         this->bias_a  = b.bias_a;
         this->gravity = b.gravity;
+        this->cov     = b.cov;
         return *this;
 	};
 
@@ -157,6 +138,7 @@ struct StatesGroup
         a.bias_g  = this->bias_g  + state_add.block<3,1>(15,0);
         a.bias_a  = this->bias_a  + state_add.block<3,1>(18,0);
         a.gravity = this->gravity + state_add.block<3,1>(21,0);
+        a.cov     = this->cov;
 		return a;
 	};
 
@@ -204,6 +186,7 @@ struct StatesGroup
     V3D bias_g;       // gyroscope bias
     V3D bias_a;       // accelerator bias
     V3D gravity;      // the estimated gravity acceleration
+    Matrix<double, DIM_STATE, DIM_STATE>  cov;     // states covariance
 };
 
 template<typename T>
@@ -232,23 +215,9 @@ auto set_pose6d(const double t, const Matrix<T, 3, 1> &a, const Matrix<T, 3, 1> 
         rot_kp.pos[i] = p(i);
         for (int j = 0; j < 3; j++)  rot_kp.rot[i*3+j] = R(i,j);
     }
+    // Map<M3D>(rot_kp.rot, 3,3) = R;
     return move(rot_kp);
 }
-
-template<typename T>
-auto imu_accumulative(const double t, const Matrix<T, 3, 1> &g, \
-                const Matrix<T, 3, 3> &R)
-{
-    GYR_ rot_kp;
-    rot_kp.offset_time = t;
-    for (int i = 0; i < 3; i++)
-    {
-        rot_kp.angvel[i] = g(i);
-        for (int j = 0; j < 3; j++)  rot_kp.rot(i, j) = R(i,j);
-    }
-    return move(rot_kp);
-}
-
 
 /* comment
 plane equation: Ax + By + Cz + D = 0
@@ -316,94 +285,108 @@ bool esti_plane(Matrix<T, 4, 1> &pca_result, const PointVector &point, const T &
             return false;
         }
     }
+
     return true;
 }
 
-
-struct Pose {
-    double x;
-    double y;
-    double z;
-    double roll;
-    double pitch;
-    double yaw;
-    V3D poseto_position()
-    {
-        V3D position(x, y, z);
-        return position;
-    }
-    M3D poseto_rotation()
-    {
-        Eigen::AngleAxisd rollAngle(roll, Eigen::Vector3d::UnitX());
-        Eigen::AngleAxisd pitchAngle(pitch, Eigen::Vector3d::UnitY());
-        Eigen::AngleAxisd yawAngle(yaw, Eigen::Vector3d::UnitZ());
-        
-        Eigen::Quaternion<double> q = yawAngle * pitchAngle * rollAngle;
-        
-        M3D rotationMatrix = q.matrix();
-        return rotationMatrix;
-    }
-    
-    Pose diffpose(Pose _p2)
-    {
-        Eigen::Affine3f SE3_p1 = pcl::getTransformation(x, y, z, roll, pitch, yaw);
-        Eigen::Affine3f SE3_p2 = pcl::getTransformation(_p2.x, _p2.y, _p2.z, _p2.roll, _p2.pitch, _p2.yaw);
-        Eigen::Matrix4f SE3_delta0 = SE3_p2.matrix().inverse() * SE3_p1.matrix();
-        Eigen::Affine3f SE3_delta;
-        SE3_delta.matrix() = SE3_delta0;
-        float dx, dy, dz, droll, dpitch, dyaw;
-        pcl::getTranslationAndEulerAngles(SE3_delta, dx, dy, dz, droll, dpitch, dyaw);
-
-        return Pose{dx, dy, dz, droll, dpitch, dyaw};
-    }
-    Pose addPoses(const Pose& pose1,const Pose& pose2) {
-        Pose poseOut;
-        Eigen::Affine3f posein_a = pcl::getTransformation(pose1.x, pose1.y, pose1.z, pose1.roll, pose1.pitch, pose1.yaw);
-        Eigen::Affine3f poseout_a = pcl::getTransformation(pose2.x, pose2.y, pose2.z, pose2.roll, pose2.pitch, pose2.yaw);;
-        Eigen::Affine3f Out_a = posein_a * poseout_a;
-        float tx, ty, tz, roll, pitch, yaw;
-        pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, roll, pitch, yaw);
-        poseOut.x = tx;
-        poseOut.y = ty;
-        poseOut.z = tz;
-        poseOut.roll = roll;
-        poseOut.pitch = pitch;
-        poseOut.yaw = yaw;
-        return poseOut;
-    }
-    void addtrans_left(const M3D rot, const V3D tran) {
-        Eigen::Affine3f transformation_matrix = Eigen::Affine3f::Identity();
-        transformation_matrix.linear() = rot.cast<float>();
-        transformation_matrix.translation() = tran.cast<float>();
-
-        Eigen::Affine3f pose = pcl::getTransformation(x, y, z, roll, pitch, yaw);
-        Eigen::Affine3f Out_a = transformation_matrix * pose;
-        float tx, ty, tz, troll, tpitch, tyaw;
-        pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, troll, tpitch, tyaw);
-        x = tx;
-        y = ty;
-        z = tz;
-        roll = troll;
-        pitch = tpitch;
-        yaw = tyaw;
-    }
-    void addtrans_right(const M3D rot, const V3D tran) {
-        Eigen::Affine3f transformation_matrix = Eigen::Affine3f::Identity();
-        transformation_matrix.linear() = rot.cast<float>();
-        transformation_matrix.translation() = tran.cast<float>();
-
-        Eigen::Affine3f pose = pcl::getTransformation(x, y, z, roll, pitch, yaw);
-        Eigen::Affine3f Out_a =  pose * transformation_matrix;
-        float tx, ty, tz, troll, tpitch, tyaw;
-        pcl::getTranslationAndEulerAngles(Out_a, tx, ty, tz, troll, tpitch, tyaw);
-        x = tx;
-        y = ty;
-        z = tz;
-        roll = troll;
-        pitch = tpitch;
-        yaw = tyaw;
-    }
+/*!
+ * @brief 雷达点结构
+ */
+struct Point3D
+{
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    Eigen::Vector3d raw_point;                // 未去畸变的点
+    Eigen::Vector3d undistort_lidar_point;    // 去畸变后的点 雷达坐标系下
+    Eigen::Vector3d world_point;              // 去畸变后世界坐标系下的点
+    float relative_time = 0.0;               // 驱动给的相对时间 ms
+    double scale = 1.0;                       // 插值比例
+    double intensity = 0.0;                   // 强度
+    Point3D() = default;
 };
 
+struct MeasureGroup     // Lidar data and imu dates for the curent process
+{
+    MeasureGroup()
+    {
+        lidar_beg_time = 0.0;
+        this->lidar.reset(new PointCloudXYZI());
+    };
+    double lidar_beg_time;
+    PointCloudXYZI::Ptr lidar;
+    deque<sensor_msgs::Imu::ConstPtr> imu;
+    std::vector<Point3D> points;
+};
+
+/*!
+ * @brief 体素索引结构
+ */
+struct voxel
+{
+
+    voxel() = default;
+
+    voxel(short x, short y, short z) : x(x), y(y), z(z) {}
+
+    bool operator==(const voxel &vox) const { return x == vox.x && y == vox.y && z == vox.z; }
+
+    inline bool operator<(const voxel &vox) const
+    {
+        return x < vox.x || (x == vox.x && y < vox.y) || (x == vox.x && y == vox.y && z < vox.z);
+    }
+
+    inline static voxel coordinates(const Eigen::Vector3d &point, double voxel_size)
+    {
+        return {short(point.x() / voxel_size),
+                short(point.y() / voxel_size),
+                short(point.z() / voxel_size)};
+    }
+
+    short x;
+    short y;
+    short z;
+};
+
+/*!
+ * @brief 体素结构
+ */
+struct voxelBlock
+{
+
+    explicit voxelBlock(int num_points_ = 20) : num_points(num_points_) { points.reserve(num_points_); }
+
+    std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>> points;
+
+    bool IsFull() const { return num_points == points.size(); }
+
+    void AddPoint(const Eigen::Vector3d &point) {
+        assert(num_points > points.size());
+        points.push_back(point);
+    }
+
+    inline int NumPoints() const { return points.size(); }
+
+    inline int Capacity() { return num_points; }
+
+private:
+    int num_points;
+};
+
+typedef tsl::robin_map<voxel, voxelBlock> voxelHashMap;
+
+// 哈希函数
+namespace std
+{
+
+    template<> struct hash<voxel>
+    {
+        std::size_t operator()(const voxel &vox) const
+        {
+            const size_t kP1 = 73856093;
+            const size_t kP2 = 19349669;
+            const size_t kP3 = 83492791;
+            return vox.x * kP1 + vox.y * kP2 + vox.z * kP3;
+        }
+    };
+}
 
 #endif

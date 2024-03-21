@@ -1,29 +1,35 @@
 common:
-    lid_topic:  "/velodyne_points"  # lid_topic:  "/velodyne_points"
-    imu_topic:  "/imu/data"            # imu_topic:  "/imu/data"
-    # lid_topic:  "/hesai/pandar"
-    # imu_topic:  "/alphasense/imu"
-    time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-    
+    lid_topic:  "/velodyne_points_0"
+    imu_topic:  "/mavros/imu/data_raw"
 preprocess:
-    lidar_type: 2                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
-    scan_line: 16               #  scan_line: 32 
-    scan_rate: 10                # only need to be set for velodyne, unit: Hz,
-    blind: 4
-    mean_acc_norm: 9.805
+    lidar_type: 2                # Velodyne LiDAR
+    scan_line: 32
+    blind: 2
+    feature_extract_en: false
+    point_filter_num: 2
 
+initialization:
+    cut_frame: false
+    cut_frame_num: 2 # must be positive integer
+    cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
+    orig_odom_freq: 10
+    mean_acc_norm: 9.805
+    online_refine_time: 15
+    data_accum_length: 800
+    Rot_LI_cov: [ 0.00005, 0.00005, 0.00005 ]
+    Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
 mapping:
-    acc_cov: 0.1
+    filter_size_surf: 0.5
+    filter_size_map: 0.5
     gyr_cov: 0.1
+    acc_cov: 0.1
+    det_range: 100.0
+    cov_lidar: 0.001
+    max_iteration: 20
+    max_undistort: 3
+    cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    fov_degree:    180
-    det_range:     100.0
-    extrinsic_est_en:  true      # true: enable the online estimation of IMU-LiDAR extrinsic,
-    extrinsic_T:  [0, 0, 0]    #   extrinsic_T: [ 0, 0, 0.28]
-    extrinsic_R: [ 1, 0, 0, 
-                   0, 1, 0, 
-                   0, 0, 1]      #  extrinsic_R
 
 publish:
     path_en:  true

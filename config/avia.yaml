@@ -1,28 +1,36 @@
 common:
     lid_topic:  "/livox/lidar"
     imu_topic:  "/livox/imu"
-    time_sync_en: false         # ONLY turn on when external time synchronization is really not possible
-
 preprocess:
-    lidar_type: 1                # 1 for Livox serials LiDAR, 2 for Velodyne LiDAR, 3 for ouster LiDAR, 
+    lidar_type: 1               # Livox series LiDAR
+    feature_extract_en: false
     scan_line: 6
-    blind: 4
-    # mean_acc_norm: 9.805     #mid70
-    mean_acc_norm: 1.0     #mid360
+    blind: 2
+    point_filter_num: 2
+
+initialization:
+    cut_frame: false
+    cut_frame_num: 5           # must be positive integer
+    cut_frame_init_num: 5       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
+    orig_odom_freq: 10
+    mean_acc_norm: 9.805
+    online_refine_time: 20
+    data_accum_length: 400
+    Rot_LI_cov: [ 0.00005, 0.00005, 0.00005 ]
+    Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
 
 mapping:
-    acc_cov: 0.1
-    gyr_cov: 0.1
+    filter_size_surf: 0.05
+    filter_size_map: 0.15
+    gyr_cov: 50
+    acc_cov: 2
+    det_range: 450.0
+    cov_lidar: 0.001
+    max_iteration: 20
+    max_undistort: 7
+    cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    fov_degree:    90
-    det_range:     450.0
-    extrinsic_est_en:  false      # true: enable the online estimation of IMU-LiDAR extrinsic
-    extrinsic_T: [ 0, 0, 0 ]
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
-                   0, 0, 1]
-
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output

@@ -316,7 +316,6 @@ static_assert(sizeof(long long) == 8);
 template <> struct select_npy_type<long long> { const static NPY_TYPES type = NPY_INT64; };
 static_assert(sizeof(unsigned long long) == 8);
 template <> struct select_npy_type<unsigned long long> { const static NPY_TYPES type = NPY_UINT64; };
-// TODO: add int, long, etc.
 
 template<typename Numeric>
 PyObject* get_array(const std::vector<Numeric>& v)
@@ -433,7 +432,6 @@ bool plot(const std::vector<Numeric> &x, const std::vector<Numeric> &y, const st
     return res;
 }
 
-// TODO - it should be possible to make this work by implementing
 // a non-numpy alternative for `detail::get_2darray()`.
 #ifndef WITHOUT_NUMPY
 template <typename Numeric>

@@ -1,0 +1,14 @@
+<launch>
+<!-- Launch file for Livox AVIA LiDAR -->
+
+	<arg name="rviz" default="true" />
+
+	<rosparam command="load" file="$(find lidar_imu_init)/config/mid360.yaml" />
+
+	<group if="$(arg rviz)">
+	<node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find lidar_imu_init)/rviz_cfg/fast_lo.rviz" />
+	</group>
+
+	launch-prefix="gdb -ex run --args"
+
+</launch>

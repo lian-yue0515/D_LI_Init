@@ -4,6 +4,7 @@
 #include <math.h>
 #include <Eigen/Core>
 
+
 #define SKEW_SYM_MATRX(v) 0.0,-v[2],v[1],v[2],0.0,-v[0],-v[1],v[0],0.0
 
 template<typename T>
@@ -15,7 +16,7 @@ Eigen::Matrix<T, 3, 3> skew_sym_mat(const Eigen::Matrix<T, 3, 1> &v)
 }
 
 template<typename T>
-Eigen::Matrix<T, 3, 3> Exp(const Eigen::Matrix<T, 3, 1> &&ang)
+Eigen::Matrix<T, 3, 3> Exp(const Eigen::Matrix<T, 3, 1> &ang)
 {
     T ang_norm = ang.norm();
     Eigen::Matrix<T, 3, 3> Eye3 = Eigen::Matrix<T, 3, 3>::Identity();
@@ -77,6 +78,25 @@ Eigen::Matrix<T, 3, 3> Exp(const T &v1, const T &v2, const T &v3)
     }
 }
 
+
+template<typename T>
+Eigen::Matrix<T, 3, 3> A_cal(const Eigen::Matrix<T, 3, 1> & ang_vel)
+{
+    T norm = ang_vel.norm();
+    Eigen::Matrix<T, 3, 3> Eye3 = Eigen::Matrix<T, 3, 3>::Identity();
+    if (norm > 0.00001)
+    {
+        Eigen::Matrix<T, 3, 1> r_ang = ang_vel / norm;
+        Eigen::Matrix<T, 3, 3> K;
+        K << SKEW_SYM_MATRX(r_ang);
+        return Eye3  + (1.0 - std::cos(norm)/norm) * K + (1.0 - std::sin(norm)/norm) * K * K ;
+    }
+    else
+    {
+        return Eye3;
+    }
+}
+
 /* Logrithm of a Rotation Matrix */
 template<typename T>
 Eigen::Matrix<T,3,1> Log(const Eigen::Matrix<T, 3, 3> &R)
@@ -107,5 +127,6 @@ Eigen::Matrix<T, 3, 1> RotMtoEuler(const Eigen::Matrix<T, 3, 3> &rot)
     Eigen::Matrix<T, 3, 1> ang(x, y, z);
     return ang;
 }
+
 
 #endif

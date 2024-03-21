@@ -38,11 +38,8 @@ using namespace Eigen;
 
 typedef Vector3d V3D;
 typedef Matrix3d M3D;
-const V3D STD_GRAV = V3D(0, 0, -G_m_s2);
 typedef pcl::PointCloud<pcl::FPFHSignature33> FPFHFeature;
 
-// Lidar Inertial Initialization
-// States needed by Initialization
 struct CalibState {
     M3D R;
     V3D T;
@@ -65,13 +62,8 @@ public:
     std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr> Undistortpoint;
     vector<GYR_> GYR_first;
     vector<GYR_> GYR_pose;
-    vector<Pose> Trueicpodom;
-    vector<Pose> odom;
-    vector<Pose> odom_no;
-    vector<Pose> odom_Paremi;
     vector<MeasureGroup> Initialized_data;
     IntegrationBase *tmp_pre_integration;
-    Pose pose_cur{0,0,0,0,0,0};
     V3D acc_0;
     V3D gyr_0;
     bool dynamic_init_fished = false;
@@ -91,7 +83,7 @@ public:
     void RefineGravity_withoutba(StatesGroup icp_state, Vector3d &g, VectorXd &x);
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                             const double &move_start_time);
-    bool Data_processing(MeasureGroup& meas, StatesGroup &icp_state, std::map<double, Pose> &poseMap, bool usetrue);
+    bool Data_processing_lo(M3D rot, V3D t, double time, IntegrationBase *pre_integration);
     void Data_propagate();
     void clear();
     void print_initialization_result(V3D &bias_g, V3D &bias_a, V3D gravity, V3D V_0);

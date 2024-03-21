@@ -1,3 +1,7 @@
+#ifndef PREPROCESS_H
+#define PREPROCESS_H
+
+#include "common_lib.h"
 #include <ros/ros.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -5,15 +9,11 @@
 
 using namespace std;
 
-#define IS_VALID(a)  ((abs(a)>1e8) ? true : false)
-
-typedef pcl::PointXYZINormal PointType;
-typedef pcl::PointCloud<PointType> PointCloudXYZI;
-
-enum LID_TYPE{AVIA = 1, VELO16, OUST64}; //{1, 2, 3}
 enum Feature{Nor, Poss_Plane, Real_Plane, Edge_Jump, Edge_Plane, Wire, ZeroPoint};
 enum Surround{Prev, Next};
 enum E_jump{Nr_nor, Nr_zero, Nr_180, Nr_inf, Nr_blind};
+
+const bool time_list_cut_frame(PointType &x, PointType &y);
 
 struct orgtype
 {
@@ -32,23 +32,22 @@ struct orgtype
     intersect = 2;
   }
 };
-
 namespace velodyne_ros {
-  struct EIGEN_ALIGN16 Point {
-      PCL_ADD_POINT4D;
-      float intensity;
-      float time;
-      uint16_t ring;
-      EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  };
+    struct EIGEN_ALIGN16 Point {
+        PCL_ADD_POINT4D;
+        float intensity;
+        float time;
+        uint16_t ring;
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    };
 }  // namespace velodyne_ros
 POINT_CLOUD_REGISTER_POINT_STRUCT(velodyne_ros::Point,
-    (float, x, x)
-    (float, y, y)
-    (float, z, z)
-    (float, intensity, intensity)
-    (float, time, time)
-    (uint16_t, ring, ring)
+        (float, x, x)
+        (float, y, y)
+        (float, z, z)
+        (float, intensity, intensity)
+        (float, time, time)
+        (uint16_t, ring, ring)
 )
 
 namespace ouster_ros {
@@ -63,8 +62,6 @@ namespace ouster_ros {
       EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };
 }  // namespace ouster_ros
-
-// clang-format off
 POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
     (float, x, x)
     (float, y, y)
@@ -77,6 +74,46 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
     (std::uint16_t, ambient, ambient)
     (std::uint32_t, range, range)
 )
+// namespace pandar_ros
+namespace pandar_ros {
+    struct EIGEN_ALIGN16 Point {
+        PCL_ADD_POINT4D;
+        float intensity;
+        double timestamp;
+        uint16_t  ring;
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    };
+}
+POINT_CLOUD_REGISTER_POINT_STRUCT(pandar_ros::Point,
+                                  (float, x, x)
+                                          (float, y, y)
+                                          (float, z, z)
+                                          (float, intensity, intensity)
+                                          (double, timestamp, timestamp)
+                                          (std::uint16_t, ring, ring)
+)
+
+//ANCHOR robosense modify
+namespace robosense_ros {
+    struct EIGEN_ALIGN16 Point {
+        PCL_ADD_POINT4D;
+        std::uint8_t intensity;
+        std::uint16_t ring;
+        double timestamp;
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    };
+}
+
+// namespace robosense_ros
+POINT_CLOUD_REGISTER_POINT_STRUCT(robosense_ros::Point,
+                                  (float, x, x)
+                                          (float, y, y)
+                                          (float, z, z)
+                                          // use std::uint32_t to avoid conflicting with pcl::uint32_t
+                                          (std::uint8_t, intensity, intensity)
+                                          (std::uint16_t, ring, ring)
+                                          (double, timestamp, timestamp)
+)
 
 class Preprocess
 {
@@ -87,23 +124,33 @@ class Preprocess
   ~Preprocess();
   
   void process(const livox_ros_driver::CustomMsg::ConstPtr &msg, PointCloudXYZI::Ptr &pcl_out);
+  void process(const livox_ros_driver::CustomMsg::ConstPtr &msg, PointCloudXYZI::Ptr &pcl_out, std::vector<Point3D>& points_out);
+  void process_cut_frame_livox(const livox_ros_driver::CustomMsg::ConstPtr &msg, deque<PointCloudXYZI::Ptr> &pcl_out, deque<double> &time_lidar, const int required_frame_num, int scan_count);
+  void process_cut_frame_livox(const livox_ros_driver::CustomMsg::ConstPtr &msg, deque<PointCloudXYZI::Ptr> &pcl_out, deque<double> &time_lidar, deque<std::vector<Point3D>> &points_lidar, const int required_frame_num, int scan_count);
   void process(const sensor_msgs::PointCloud2::ConstPtr &msg, PointCloudXYZI::Ptr &pcl_out);
+  void process(const sensor_msgs::PointCloud2::ConstPtr &msg, PointCloudXYZI::Ptr &pcl_out, std::vector<Point3D>& points_out);
+  void process_cut_frame_pcl2(const sensor_msgs::PointCloud2::ConstPtr &msg, deque<PointCloudXYZI::Ptr> &pcl_out, deque<double> &time_lidar, const int required_frame_num, int scan_count);
+  void process_cut_frame_pcl2(const sensor_msgs::PointCloud2::ConstPtr &msg, deque<PointCloudXYZI::Ptr> &pcl_out, deque<double> &time_lidar, deque<std::vector<Point3D>> &points_lidar, const int required_frame_num, int scan_count);
   void set(bool feat_en, int lid_type, double bld, int pfilt_num);
 
   // sensor_msgs::PointCloud2::ConstPtr pointcloud;
   PointCloudXYZI pl_full, pl_corn, pl_surf;
+  std::vector<Point3D> pt_surf;
   PointCloudXYZI pl_buff[128]; //maximum 128 line lidar
   vector<orgtype> typess[128]; //maximum 128 line lidar
-  int lidar_type, point_filter_num, N_SCANS, SCAN_RATE;
+  int lidar_type, point_filter_num, N_SCANS;;
   double blind;
   bool feature_enabled, given_offset_time;
   ros::Publisher pub_full, pub_surf, pub_corn;
-    
+  fstream log_pre;
+  int cut_frame_init_num;
 
   private:
   void avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg);
-  void oust64_handler(const sensor_msgs::PointCloud2::ConstPtr &msg);
+  void oust_handler(const sensor_msgs::PointCloud2::ConstPtr &msg);
   void velodyne_handler(const sensor_msgs::PointCloud2::ConstPtr &msg);
+  void velodyne_handler_kitti(const sensor_msgs::PointCloud2::ConstPtr &msg);
+  void l515_handler(const sensor_msgs::PointCloud2::ConstPtr &msg);
   void give_feature(PointCloudXYZI &pl, vector<orgtype> &types);
   void pub_func(PointCloudXYZI &pl, const ros::Time &ct);
   int  plane_judge(const PointCloudXYZI &pl, vector<orgtype> &types, uint i, uint &i_nex, Eigen::Vector3d &curr_direct);
@@ -120,3 +167,4 @@ class Preprocess
   double smallp_intersect, smallp_ratio;
   double vx, vy, vz;
 };
+#endif
