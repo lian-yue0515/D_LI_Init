@@ -334,7 +334,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
         angular_velocity_.x() = tail->angular_velocity.x;
         angular_velocity_.y() = tail->angular_velocity.y;
         angular_velocity_.z() = tail->angular_velocity.z;
-        if(tail->header.stamp.toSec() > pcl_end_time)
+        if(tail->header.stamp.toSec() > pcl_end_time){
             dt = pcl_end_time - head->header.stamp.toSec();
             double dt_ = tail->header.stamp.toSec() - pcl_end_time;
             double w1 = dt / (dt + dt_);
@@ -347,7 +347,7 @@ bool Dynamic_init::Data_processing(MeasureGroup& meas, StatesGroup &icp_state, s
             angular_velocity_.z() = w1 * tail->angular_velocity.z + w2 * tail->angular_velocity.z;
             acc_0 = linear_acceleration_;
             gyr_0 = angular_velocity_;
-
+        }
         tmp_pre_integration->push_back(dt, linear_acceleration_ / mean_acc_norm * G_m_s2, angular_velocity_);
         angvel_last = angvel_avr;
         double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;
