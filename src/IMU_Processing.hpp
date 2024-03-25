@@ -119,7 +119,7 @@ ImuProcess::ImuProcess()
   fout_imu.open(DEBUG_FILE_DIR("imu.txt"),ios::out);
 }
 
-ImuProcess::~ImuProcess() {}
+ImuProcess::~ImuProcess() {delete tmp_pre_integration;}
 
 void ImuProcess::Reset() 
 {
@@ -240,6 +240,8 @@ void ImuProcess::Forward_propagation_without_imu(const MeasureGroup &meas, State
         gyr_0.x() = meas.imu.back()->angular_velocity.x;
         gyr_0.y() = meas.imu.back()->angular_velocity.y;
         gyr_0.z() = meas.imu.back()->angular_velocity.z;
+        tmp_pre_integration = new IntegrationBase{Zero3d, Zero3d, Zero3d, Zero3d};
+        return;
     }
     else
     {
@@ -282,7 +284,7 @@ void ImuProcess::Forward_propagation_without_imu(const MeasureGroup &meas, State
             angular_velocity_.x() = tail->angular_velocity.x;
             angular_velocity_.y() = tail->angular_velocity.y;
             angular_velocity_.z() = tail->angular_velocity.z;
-            if(tail->header.stamp.toSec() > pcl_end_time)
+            if(tail->header.stamp.toSec() > pcl_end_time){
                 dt = pcl_end_time - head->header.stamp.toSec();
                 double dt_ = tail->header.stamp.toSec() - pcl_end_time;
                 double w1 = dt / (dt + dt_);
@@ -295,7 +297,7 @@ void ImuProcess::Forward_propagation_without_imu(const MeasureGroup &meas, State
                 angular_velocity_.z() = w1 * tail->angular_velocity.z + w2 * tail->angular_velocity.z;
                 acc_0 = linear_acceleration_;
                 gyr_0 = angular_velocity_;
-
+            }
             tmp_pre_integration->push_back(dt, linear_acceleration_ / IMU_mean_acc_norm * G_m_s2, angular_velocity_);
             angvel_last = angvel_avr;
             double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;

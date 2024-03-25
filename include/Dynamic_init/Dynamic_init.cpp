@@ -29,7 +29,7 @@ bool Dynamic_init::Data_processing_lo(M3D rot, V3D t, double time, IntegrationBa
 Dynamic_init::Dynamic_init(){
     fout_LiDAR_meas.open(FILE_DIR("LiDAR_meas.txt"), ios::out);
     fout_IMU_meas.open(FILE_DIR("IMU_meas.txt"), ios::out);
-    data_accum_length = 10;
+    data_accum_length = 20;
     lidar_frame_count = 0;
     gyro_bias = Zero3d;
     acc_bias = Zero3d;

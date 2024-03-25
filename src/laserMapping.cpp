@@ -469,9 +469,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
 void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in, const ros::Publisher &pubIMU_sync) {
     publish_count++;
     mtx_buffer.lock();
-
-
-    static double IMU_period, time_msg_in, last_time_msg_in;
+   static double IMU_period, time_msg_in, last_time_msg_in;
     static int imu_cnt = 0;
     time_msg_in = msg_in->header.stamp.toSec();
 
@@ -492,23 +490,16 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in, const ros::Publisher &pub
         }
     }
     last_time_msg_in = time_msg_in;
-
-
     sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
 
-    //IMU Time Compensation
-    msg->header.stamp = ros::Time().fromSec(msg->header.stamp.toSec() - timediff_imu_wrt_lidar - time_lag_IMU_wtr_lidar);
     double timestamp = msg->header.stamp.toSec();
 
     if (timestamp < last_timestamp_imu) {
         ROS_WARN("IMU loop back, clear IMU buffer.");
         imu_buffer.clear();
     }
-
     last_timestamp_imu = timestamp;
     imu_buffer.push_back(msg);
-
-
     mtx_buffer.unlock();
     sig_buffer.notify_all();
 }
@@ -518,6 +509,8 @@ void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in, const ros::Publisher &pub
  * @param meas
  * @return
  */
+double lidar_mean_scantime = 0.0;
+int    scan_num = 0;
 bool sync_packages(MeasureGroup &meas)
 {
     if (lidar_buffer.empty() || lidar_points_buffer.empty() || imu_buffer.empty())
@@ -530,6 +523,7 @@ bool sync_packages(MeasureGroup &meas)
     {
         meas.lidar = lidar_buffer.front();
         meas.points = lidar_points_buffer.front();
+        meas.lidar_beg_time = time_buffer.front(); //unit:s
 
         if (meas.lidar->points.size() <= 1)
         {
@@ -540,14 +534,18 @@ bool sync_packages(MeasureGroup &meas)
             return false;
         }
 
-        meas.lidar_beg_time = time_buffer.front(); //unit:s
-
-        /// FIXME 这里的meas.lidar没有排序 可以直接去最后一个点的时间么？？？
-        if (lidar_type == L515)
-            lidar_end_time = meas.lidar_beg_time;
+        if (meas.lidar->points.back().curvature / double(1000) < 0.5 * lidar_mean_scantime)
+        {
+            lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
+        }
         else
-            lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000); //unit:s
+        {
+            scan_num ++;
+            lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000);
+            lidar_mean_scantime += (meas.lidar->points.back().curvature / double(1000) - lidar_mean_scantime) / scan_num;
+        }
 
+        meas.lidar_end_time = lidar_end_time;
         lidar_pushed = true;
     }
 
@@ -556,18 +554,18 @@ bool sync_packages(MeasureGroup &meas)
     {
         return false;
     }
+
     /** push imu data, and pop from imu buffer **/
     double imu_time = imu_buffer.front()->header.stamp.toSec();
     meas.imu.clear();
+
     while ((!imu_buffer.empty()) && (imu_time < lidar_end_time)) {
         imu_time = imu_buffer.front()->header.stamp.toSec();
         if (imu_time > lidar_end_time) break;
         meas.imu.push_back(imu_buffer.front());
         imu_buffer.pop_front();
     }
-    if(meas.imu.empty()){
-        return false;
-    }
+
     lidar_buffer.pop_front();
     lidar_points_buffer.pop_front();
     time_buffer.pop_front();
@@ -1214,7 +1212,7 @@ int main(int argc, char **argv)
     p_imu->LI_init_done = false;
     p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
     p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
-
+    p_imu->set_mean_acc_norm(1);
     G.setZero();
     H_T_H.setZero();
     I_STATE.setIdentity();
@@ -1353,12 +1351,13 @@ int main(int argc, char **argv)
                     }
                     ikdtree.Build(feats_down_world->points);
                 }
+                if( dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration) ){
+                    
+                }
                 continue;
             }
-
             int featsFromMapNum = ikdtree.validnum();
             kdtree_size_st = ikdtree.size();
-
             /*** ICP and iterated Kalman filter update ***/
             normvec->resize(feats_points_size);
             feats_down_world->resize(feats_points_size);
@@ -1623,7 +1622,6 @@ int main(int argc, char **argv)
 
             std::chrono::steady_clock::time_point map_increment_begin = std::chrono::steady_clock::now();
 
-
             /*** add the feature points to map kdtree ***/
             map_incremental();
 
@@ -1663,7 +1661,12 @@ int main(int argc, char **argv)
                      << state.offset_T_L_I.transpose() << " " << state.vel_end.transpose() << " "  \
                      << " " << state.bias_g.transpose() << " " << state.bias_a.transpose() * 0.9822 / 9.81 << " "
                      << state.gravity.transpose() << " " << total_distance << endl;
-
+            if( dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration) ){
+                    dynamic_init->solve_Rot_bias_gyro();
+                    VectorXd x_;
+                    dynamic_init->LinearAlignment_withoutba(state, x_);
+                    return 0;
+            }
         }
         status = ros::ok();
         rate.sleep();
