@@ -100,7 +100,11 @@ struct StatesGroup
         this->cov     = MD(DIM_STATE,DIM_STATE)::Identity() * INIT_COV;
         this->cov.block<9,9>(15,15) = MD(9,9)::Identity() * 0.00001;
 	};
-
+    void set_extrinsic(const V3D &transl, const M3D &rot)
+    {
+        this->offset_T_L_I = transl;
+        this->offset_R_L_I = rot;
+    }
     StatesGroup(const StatesGroup& b) {
 		this->rot_end = b.rot_end;
 		this->pos_end = b.pos_end;

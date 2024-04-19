@@ -45,6 +45,7 @@ class ImuProcess
   
   void Reset();
   void Reset(double start_timestamp, const sensor_msgs::ImuConstPtr &lastimu);
+  void set_extrinsic(const V3D &transl, const M3D &rot);
   void set_R_LI_cov(const V3D &R_LI_cov);
   void set_T_LI_cov(const V3D &T_LI_cov);
   void set_gyr_cov(const V3D &scaler);
@@ -71,7 +72,9 @@ class ImuProcess
   double first_lidar_time;
   int    lidar_type;
   bool   imu_en;
-  bool LI_init_done = false;
+  bool Dynamic_init_done = true;
+  bool Dynamic_init = false;
+  
   double IMU_mean_acc_norm;
   double frame_dt = 0.0;
   double frame_end_time = 0.0;
@@ -90,6 +93,8 @@ private:
   sensor_msgs::ImuConstPtr last_imu_;
   deque<sensor_msgs::ImuConstPtr> v_imu_;
   vector<Pose6D> IMUpose;
+  M3D Lidar_R_wrt_IMU;
+  V3D Lidar_T_wrt_IMU;
   V3D mean_acc;
   V3D mean_gyr;
   V3D angvel_last;
@@ -115,6 +120,8 @@ ImuProcess::ImuProcess()
   mean_acc        = V3D(0, 0, -1.0);
   mean_gyr        = V3D(0, 0, 0);
   angvel_last     = Zero3d;
+  Lidar_T_wrt_IMU = Zero3d;
+  Lidar_R_wrt_IMU = Eye3d;
   last_imu_.reset(new sensor_msgs::Imu());
   fout_imu.open(DEBUG_FILE_DIR("imu.txt"),ios::out);
 }
@@ -135,6 +142,11 @@ void ImuProcess::Reset()
   cur_pcl_un_.reset(new PointCloudXYZI());
 }
 
+void ImuProcess::set_extrinsic(const V3D &transl, const M3D &rot)
+{
+    Lidar_T_wrt_IMU = transl;
+    Lidar_R_wrt_IMU = rot;
+}
 
 void ImuProcess::set_gyr_cov(const V3D &scaler)
 {
@@ -213,7 +225,7 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, StatesGroup &state_inout, in
 
 
 /*!
- * @brief 无IMU的前向传播 当前已经不在此处去畸变
+ * @brief
  * @param meas
  * @param state_inout
  * @param pcl_out
@@ -233,6 +245,9 @@ void ImuProcess::Forward_propagation_without_imu(const MeasureGroup &meas, State
         b_first_frame_ = false;
         frame_dt = pcl_out.points.back().curvature / double(1000) - pcl_out.points.front().curvature / double(1000);
         frame_end_time = pcl_out.points.back().curvature;
+        if(meas.imu.empty()){
+          cout<<"**************************"<<endl;
+        }
         last_imu_ = meas.imu.back();
         acc_0.x() = meas.imu.back()->linear_acceleration.x;
         acc_0.y() = meas.imu.back()->linear_acceleration.y;
@@ -332,13 +347,14 @@ void ImuProcess::Forward_propagation_without_imu(const MeasureGroup &meas, State
                 if (it_pcl == pcl_out.points.begin()) break;
             }
         }
-
     }
 
-    ///  前向传播更改为SE3传播
+    //  前向传播更改为SE3传播
     M3D Exp_f = Exp(state_inout.bias_g, dt);
     /** Forward propagation of attitude **/
     state_inout.rot_end = state_inout.rot_end * Exp_f;
+    
+    // state_inout.rot_end = rot_end;    //imu
 
     /** Position Propagation **/
     state_inout.pos_end += state_inout.rot_end * state_inout.vel_end * dt;
@@ -534,7 +550,26 @@ void ImuProcess::propagation_and_undist(const MeasureGroup &meas, StatesGroup &s
 
 void ImuProcess::Process(const MeasureGroup &meas, StatesGroup &state, PointCloudXYZI::Ptr pcl_un_, V3D ba, V3D bg)
 {
-    // 2.2 不再保留部分原有部分代码
+  if (imu_en)
+  {
+    if(meas.imu.empty())  return;
+    ROS_ASSERT(meas.lidar != nullptr);
+
+    if (imu_need_init_)
+    {
+        printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, online iteration begins.\n\n" RESET);
+        last_imu_   = meas.imu.back();
+        imu_need_init_ = false;
+        cov_acc = cov_acc_scale;
+        cov_gyr = cov_gyr_scale;
+        pcl_un_ = (meas.lidar);
+        return;
+    }
+    propagation_and_undist(meas, state, *pcl_un_);
+  }
+  else
+  {
     Forward_propagation_without_imu(meas, state, *pcl_un_, ba, bg);
+  }
 }
 #endif

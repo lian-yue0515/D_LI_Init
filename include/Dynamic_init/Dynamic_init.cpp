@@ -14,6 +14,16 @@ void voxel_filter(pcl::PointCloud<PointType>::Ptr &cloud, pcl::PointCloud<PointT
     voxel.filter(*cloud_filtered);
 }
 
+bool Dynamic_init::Data_processing(MeasureGroup& meas)
+{
+    Initialized_data.push_back(meas);
+    if (lidar_frame_count < data_accum_length)
+    {
+        lidar_frame_count++;
+        return false;
+    }
+    return true; 
+}
 bool Dynamic_init::Data_processing_lo(M3D rot, V3D t, double time, IntegrationBase *pre_integration){
     CalibState calibState(rot, t, time);
     calibState.pre_integration = pre_integration;

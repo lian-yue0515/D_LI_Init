@@ -74,10 +74,11 @@ const float MOV_THRESHOLD = 1.5f;
 
 mutex mtx_buffer;
 condition_variable sig_buffer;
-
+vector<double>       extrinT(3, 0.0);
+vector<double>       extrinR(9, 0.0);
 string root_dir = ROOT_DIR;
 string map_file_path, lid_topic, imu_topic;
-
+bool Iteration_begin = false;
 int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0, \
  effect_feat_num = 0, scan_count = 0, publish_count = 0;
 
@@ -174,7 +175,10 @@ V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);
 V3D euler_cur;
 V3D position_last(Zero3d);
 V3D last_odom(Zero3d);
-
+V3D Lidar_T_wrt_IMU(Zero3d);
+M3D Lidar_R_wrt_IMU(Eye3d);
+double Last_g;
+double current_g;
 fstream f;
 
 //estimator inputs and output;
@@ -582,6 +586,7 @@ bool sync_packages_only_lidar(MeasureGroup &meas) {
         meas.lidar = lidar_buffer.front();
 
         if (meas.lidar->points.size() <= 1) {
+
             ROS_WARN("Too few input point cloud!\n");
             lidar_buffer.pop_front();
             time_buffer.pop_front();
@@ -835,8 +840,13 @@ void iterCurrentPoint3D(Point3D& current_point, bool converge)
         // T_wj = inter(T_wb, T_we)   T_ej = T_ew * T_wj   P_e = T_ej * P_j  P_w = T_wj * P_j
         Sophus::SE3d T_j = Sophus::interpolate(T_begin, T_end, scale);
         Sophus::SE3d T_ej = T_end.inverse() * T_j;
-        Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
-        current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
+        if(!imu_en){
+            Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
+            current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
+        }else{
+            Sophus::SE3d T_ej_without_rotation_tran(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+            current_point.undistort_lidar_point = T_ej_without_rotation_tran * current_point.raw_point;
+        }
         current_point.world_point = T_j * current_point.raw_point;
     }
     else
@@ -1165,6 +1175,8 @@ int main(int argc, char **argv)
     nh.param<double>("mapping/filter_size_map", filter_size_map_min, 0.5);
     nh.param<double>("mapping/cube_side_length", cube_len, 200);
     nh.param<float>("mapping/det_range", DET_RANGE, 300.f);
+    nh.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
+    nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
     nh.param<double>("mapping/gyr_cov", gyr_cov, 0.1);
     nh.param<double>("mapping/acc_cov", acc_cov, 0.1);
     nh.param<double>("preprocess/blind", p_pre->blind, 1.0);
@@ -1209,13 +1221,17 @@ int main(int argc, char **argv)
 
     p_imu->lidar_type = p_pre->lidar_type = lidar_type;
     p_imu->imu_en = imu_en;
-    p_imu->LI_init_done = false;
     p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
     p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
     p_imu->set_mean_acc_norm(1);
     G.setZero();
     H_T_H.setZero();
     I_STATE.setIdentity();
+
+    Lidar_T_wrt_IMU<<VEC_FROM_ARRAY(extrinT);
+    Lidar_R_wrt_IMU<<MAT_FROM_ARRAY(extrinR);
+    state.set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
+    p_imu->set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
 
     last_state = state;
 
@@ -1259,29 +1275,53 @@ int main(int argc, char **argv)
             ("/aft_mapped_to_init", 100000);
     ros::Publisher pubPath = nh.advertise<nav_msgs::Path>
             ("/path", 100000);
-
+    int Iteration_NUM;
+    double Iteration;
+    nh.getParam("/Iteration_NUM", Iteration_NUM);
+    nh.getParam("/Data_accum_length", dynamic_init->data_accum_length);
+    nh.getParam("/Iteration", Iteration);
 //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
     bool status = ros::ok();
     int frame_id = 0;
+    int iteration_num = 0;
+    int measures_num = -1;
+    bool data_alignment = 0;
     while (status)
     {
         if (flg_exit) break;
         ros::spinOnce();
-
-        if (sync_packages(Measures))
-        {
-            std::chrono::steady_clock::time_point frame_begin = std::chrono::steady_clock::now();
-            frame_id++;
-            if (flg_reset)
-            {
-                ROS_WARN("reset when rosbag play back.");
-                p_imu->Reset();
-                flg_reset = false;
-                continue;
+        if(!dynamic_init->Data_processing_fished){
+            if(sync_packages(Measures)){
+                if (flg_reset)
+                {
+                    ROS_WARN("reset when rosbag play back.");
+                    p_imu->Reset();
+                    flg_reset = false;
+                    continue;
+                }
+                if(dynamic_init->Data_processing(Measures))
+                {
+                    dynamic_init->Data_processing_fished = true;
+                    dynamic_init->lidar_frame_count = 0;
+                }else{
+                    continue;
+                }
             }
-
+        }
+        if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
+            measures_num = measures_num + 1;
+            if( measures_num == dynamic_init->data_accum_length) measures_num = 0;
+            Measures = dynamic_init->Initialized_data[measures_num];
+            data_alignment = 1;
+        } else {
+            data_alignment = sync_packages(Measures); 
+        }
+        if(data_alignment) 
+        {
+            frame_id++;
+            data_alignment = 0;
             std::chrono::steady_clock::time_point t_imu_process_begin = std::chrono::steady_clock::now();
 
             /// 获得当前帧的Point3D点
@@ -1289,27 +1329,27 @@ int main(int argc, char **argv)
             /// 未下采样的Point3D点
             feats_points_full = Measures.points;
 
+            if(frame_id < 20){
+                pcl::PointCloud<PointType>::Ptr cloudyuanshi(new pcl::PointCloud<PointType>());
+                *cloudyuanshi = *Measures.lidar;
+                std::string filenameyuanshi = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/yuanshi/yuanshi"+ std::to_string(frame_id)+ ".pcd";
+                pcl::io::savePCDFile(filenameyuanshi, *(cloudyuanshi));
+            }
+            p_imu->Process(Measures, state, feats_undistort, dynamic_init->get_acc_bias(), dynamic_init->get_gyro_bias());
+
             if (feats_undistort->empty() || (feats_undistort == NULL))
             {
                 first_lidar_time = Measures.lidar_beg_time;
                 p_imu->first_lidar_time = first_lidar_time;
                 ROS_WARN("First frame, no points stored.");
+                continue;
             }
-
-            // if(frame_id < 10){
-            //     pcl::PointCloud<PointType>::Ptr cloudyuanshi(new pcl::PointCloud<PointType>());
-            //     *cloudyuanshi = *Measures.lidar;
-            //     std::string filenameyuanshi = "/home/myx/Downloads/YWL_LO/src/LiDAR_IMU_Init/pcb/yuanshi/yuanshi"+ std::to_string(frame_id)+ ".pcd";
-            //     pcl::io::savePCDFile(filenameyuanshi, *(cloudyuanshi));
-            // }
-            p_imu->Process(Measures, state, feats_undistort, dynamic_init->get_acc_bias(), dynamic_init->get_gyro_bias());
-            // if(frame_id < 10){
-            //     pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
-            //     *cloudshowqujibian = (*feats_undistort);
-            //     std::string filenamequjibian = "/home/myx/Downloads/YWL_LO/src/LiDAR_IMU_Init/pcb/qujibian/qujibian"+ std::to_string(frame_id)+ ".pcd";
-            //     pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
-            // }
-
+            if(frame_id < 20){
+                pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
+                *cloudshowqujibian = (*feats_undistort);
+                std::string filenamequjibian = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibian/qujibian"+ std::to_string(frame_id)+ ".pcd";
+                pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
+            }
 
             feats_points = PCLtoPoint3D(feats_undistort, RAW);
             current_dt = p_imu->frame_dt;
@@ -1351,8 +1391,13 @@ int main(int argc, char **argv)
                     }
                     ikdtree.Build(feats_down_world->points);
                 }
-                if( dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration) ){
-                    
+                if(!imu_en){
+                    if(!Iteration_begin){
+                        dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
+                    }else{
+                        dynamic_init->system_state[measures_num].R = state.rot_end;
+                        dynamic_init->system_state[measures_num].T = state.pos_end;
+                    }
                 }
                 continue;
             }
@@ -1510,8 +1555,19 @@ int main(int argc, char **argv)
                     laserCloudOri->points[i].intensity = sqrt(R_inv(i));
 
                     /*** calculate the Measurement Jacobian matrix H ***/
-                    V3D A(point_crossmat * state.rot_end.transpose() * norm_vec);
-                    Hsub.row(i) << VEC_FROM_ARRAY(A), norm_p.x, norm_p.y, norm_p.z, 0, 0, 0, 0, 0, 0;
+                    if (imu_en) {
+                        M3D point_this_L_cross;
+                        point_this_L_cross << SKEW_SYM_MATRX(point_this_L);
+                        V3D H_R_LI = point_this_L_cross * state.offset_R_L_I.transpose() * state.rot_end.transpose() *
+                                     norm_vec;
+                        V3D H_T_LI = state.rot_end.transpose() * norm_vec;
+                        V3D A(point_crossmat * state.rot_end.transpose() * norm_vec);
+                        Hsub.row(i) << VEC_FROM_ARRAY(A), norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(
+                                H_R_LI), VEC_FROM_ARRAY(H_T_LI);
+                    } else {
+                        V3D A(point_crossmat * state.rot_end.transpose() * norm_vec);
+                        Hsub.row(i) << VEC_FROM_ARRAY(A), norm_p.x, norm_p.y, norm_p.z, 0, 0, 0, 0, 0, 0;
+                    }
 
                     Hsub_T_R_inv.col(i) = Hsub.row(i).transpose() / cov_lidar;
                     /*** Measurement: distance to the closest surface/corner ***/
@@ -1556,27 +1612,28 @@ int main(int argc, char **argv)
                 {
                     nearest_search_en = true;
                     rematch_num++;
+                    if(!imu_en){
+                        /// 全局收敛判断 两次匹配的收敛状态相差小于阈值 重新进行去畸变
+                        auto delta_state = state - last_converge_state;
 
-                    /// 全局收敛判断 两次匹配的收敛状态相差小于阈值 重新进行去畸变
-                    auto delta_state = state - last_converge_state;
-
-                    if (((delta_state.block<3, 1>(0, 0).norm() * 57.3 < 1) && (delta_state.block<3, 1>(3, 0).norm() * 100 < 1.0) && iterCount >= 4)
-                            || current_iter_count >= 15)
-                    {
-                        current_converge = true;
-                        current_iter_count = 0;
-                        /// 如果去畸变次数达到预设值，那么也退出
-                        if (distort_time >= NUM_MAX_UNDISTORT)
+                        if (((delta_state.block<3, 1>(0, 0).norm() * 57.3 < 1) && (delta_state.block<3, 1>(3, 0).norm() * 100 < 1.0) && iterCount >= 4)
+                                || current_iter_count >= 15)
                         {
-                            EKF_stop_flg = true;
+                            current_converge = true;
+                            current_iter_count = 0;
+                            /// 如果去畸变次数达到预设值，那么也退出
+                            if (distort_time >= NUM_MAX_UNDISTORT)
+                            {
+                                EKF_stop_flg = true;
+                            }
                         }
-                    }
 
-                    last_converge_state = state;
+                        last_converge_state = state;
+                    }
                 }
 
                 /*** Adjust const velocity model cov ***/
-                if (iterCount == 1 && adaptive_cov) adjustCVCov();
+                // if (iterCount == 1 && adaptive_cov) adjustCVCov();
 
 
                 /*** Convergence Judgements and Covariance Update ***/
@@ -1593,8 +1650,17 @@ int main(int argc, char **argv)
                         position_last = state.pos_end;
                         M3D rot_cur_lidar = state.rot_end * state.offset_R_L_I;
                         V3D euler_cur_lidar = RotMtoEuler(rot_cur_lidar);
-                        geoQuat = tf::createQuaternionMsgFromRollPitchYaw
-                                (euler_cur_lidar(0), euler_cur_lidar(1), euler_cur_lidar(2));
+
+                        if (!imu_en) {
+                            geoQuat = tf::createQuaternionMsgFromRollPitchYaw
+                                    (euler_cur_lidar(0), euler_cur_lidar(1), euler_cur_lidar(2));
+                        } else {
+                            //Publish LiDAR's pose, instead of IMU's pose
+                            M3D rot_cur_lidar = state.rot_end * state.offset_R_L_I;
+                            V3D euler_cur_lidar = RotMtoEuler(rot_cur_lidar);
+                            geoQuat = tf::createQuaternionMsgFromRollPitchYaw
+                                    (euler_cur_lidar(0), euler_cur_lidar(1), euler_cur_lidar(2));
+                        }
                         VD(DIM_STATE) K_sum = K.rowwise().sum();
                         VD(DIM_STATE) P_diag = state.cov.diagonal();
                     }
@@ -1650,7 +1716,6 @@ int main(int argc, char **argv)
               " map_increment = " << std::chrono::duration_cast<std::chrono::duration<double> >(map_increment_end - map_increment_begin).count() * 1000 << " ms" <<
               " total iter = " << iter_count <<
               " total distort iter = " << distort_time <<
-              " total time = " << std::chrono::duration_cast<std::chrono::duration<double> >(frame_end - frame_begin).count() * 1000 << " ms" << endl;
             log_id++;
 
 
@@ -1661,11 +1726,82 @@ int main(int argc, char **argv)
                      << state.offset_T_L_I.transpose() << " " << state.vel_end.transpose() << " "  \
                      << " " << state.bias_g.transpose() << " " << state.bias_a.transpose() * 0.9822 / 9.81 << " "
                      << state.gravity.transpose() << " " << total_distance << endl;
-            if( dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration) ){
+            if(!imu_en){
+                if(!Iteration_begin){
+                    dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
+                }else{
+                    dynamic_init->system_state[measures_num].R = state.rot_end;
+                    dynamic_init->system_state[measures_num].T = state.pos_end;
+                }
+            }else{
+                //do nothing
+            }
+            if(measures_num == dynamic_init->data_accum_length - 1 && !dynamic_init->dynamic_init_fished){
+                if(!dynamic_init->dynamic_init_fished){
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
                     dynamic_init->LinearAlignment_withoutba(state, x_);
-                    return 0;
+                    current_g = dynamic_init->get_g();
+                    if(!Iteration_begin){
+                        Iteration_begin = true;
+                        cout<<"kaishidiedai!!!"<<endl;
+                        Last_g = dynamic_init->get_g();
+                        state.bias_a = Zero3d;
+                        state.offset_R_L_I = Lidar_R_wrt_IMU;
+                        state.offset_T_L_I = Lidar_T_wrt_IMU;
+
+                        state.pos_end = Zero3d;
+                        state.rot_end = Eye3d;
+
+                        state.bias_g = dynamic_init->get_gyro_bias();
+                        state.gravity = -(Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
+                        state.vel_end = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+
+                        state.cov(6, 6) = state.cov(7, 7) = state.cov(8, 8) = 0.00001;  //offset_R_L_I
+                        state.cov(9, 9) = state.cov(10, 10) = state.cov(11, 11) = 0.00001;   //offset_T_L_I
+                        state.cov(12, 12) = state.cov(13, 13) = state.cov(14, 14) = 0.001;  //vel
+                        state.cov(15, 15) = state.cov(16, 16) = state.cov(17, 17) = 0.001;  //bg
+                        state.cov(18, 18) = state.cov(19, 19) = state.cov(20, 20) = 0.001;  //ba
+                        state.cov(21, 21) = state.cov(22, 22) = state.cov(23, 23) = 0.001;  //g
+                        p_imu->Dynamic_init = true;
+                        imu_en = true;
+                        p_imu->imu_en = imu_en;
+                        p_imu->Reset();
+                        // flg_reset = true;
+                        ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
+                        feats_undistort == NULL;
+                        continue;
+                    }
+                }
+                if(abs(Last_g-current_g) < Iteration || iteration_num == Iteration_NUM)
+                {
+                    dynamic_init->dynamic_init_fished = true;
+                }else{
+                    iteration_num ++;
+                    Last_g = dynamic_init->get_g();
+                    state.bias_a = Zero3d;
+                    state.offset_R_L_I = Lidar_R_wrt_IMU;
+                    state.offset_T_L_I = Lidar_T_wrt_IMU;
+
+                    state.pos_end = Zero3d;
+                    state.rot_end = Eye3d;
+
+                    state.bias_g = dynamic_init->get_gyro_bias();
+                    state.gravity = -(Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
+                    state.vel_end = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+
+                    state.cov(6, 6) = state.cov(7, 7) = state.cov(8, 8) = 0.00001;  //offset_R_L_I
+                    state.cov(9, 9) = state.cov(10, 10) = state.cov(11, 11) = 0.00001;   //offset_T_L_I
+                    state.cov(12, 12) = state.cov(13, 13) = state.cov(14, 14) = 0.001;  //vel
+                    state.cov(15, 15) = state.cov(16, 16) = state.cov(17, 17) = 0.001;  //bg
+                    state.cov(18, 18) = state.cov(19, 19) = state.cov(20, 20) = 0.001;  //ba
+                    state.cov(21, 21) = state.cov(22, 22) = state.cov(23, 23) = 0.001;  //g
+                    p_imu->Dynamic_init = true;
+                    p_imu->Reset();
+                    ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
+                    feats_undistort == NULL;
+                    // return 0;
+                }
             }
         }
         status = ros::ok();

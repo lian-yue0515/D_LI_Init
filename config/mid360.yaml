@@ -9,7 +9,7 @@ preprocess:
     point_filter_num: 3
 
 initialization:
-    cut_frame: true
+    cut_frame: false
     cut_frame_num: 1           # 分帧数
     cut_frame_init_num: 5       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
@@ -31,6 +31,10 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
+    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
 adaptive_cov:
     use: true
     K: 100.0

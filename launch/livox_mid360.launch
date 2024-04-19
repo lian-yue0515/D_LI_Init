@@ -4,7 +4,10 @@
 	<arg name="rviz" default="true" />
 
 	<rosparam command="load" file="$(find lidar_imu_init)/config/mid360.yaml" />
-
+    <param name="Iteration_NUM" type="int" value="200" />
+    <param name="Data_accum_length" type="int" value="20" />
+	<param name="Iteration" type="double" value="0.001" />
+    <param name="Data_accum_length" type="int" value="20" />
 	<node pkg="lidar_imu_init" type="li_init" name="laserMapping" output="screen" />
 
 	<group if="$(arg rviz)">

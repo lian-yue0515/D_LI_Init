@@ -18,7 +18,10 @@ initialization:
     data_accum_length: 500
     Rot_LI_cov: [ 0.00005, 0.00005, 0.00005 ]
     Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
-
+    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
 mapping:
     filter_size_surf: 0.05
     filter_size_map: 0.15

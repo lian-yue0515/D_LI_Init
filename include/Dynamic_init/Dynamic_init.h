@@ -83,6 +83,7 @@ public:
     void RefineGravity_withoutba(StatesGroup icp_state, Vector3d &g, VectorXd &x);
     void Dynamic_Initialization(int &orig_odom_freq, int &cut_frame_num, double &timediff_imu_wrt_lidar,
                             const double &move_start_time);
+    bool Data_processing(MeasureGroup& meas);
     bool Data_processing_lo(M3D rot, V3D t, double time, IntegrationBase *pre_integration);
     void Data_propagate();
     void clear();

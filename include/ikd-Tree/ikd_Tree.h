@@ -153,7 +153,6 @@ private:
     bool Criterion_Check(KD_TREE_NODE * root);
     void Push_Down(KD_TREE_NODE * root);
     void Update(KD_TREE_NODE * root); 
-    void delete_tree_nodes(KD_TREE_NODE ** root);
     void downsample(KD_TREE_NODE ** root);
     bool same_point(PointType a, PointType b);
     float calc_dist(PointType a, PointType b);
@@ -171,6 +170,7 @@ public:
     void InitializeKDTree(float delete_param = 0.5, float balance_param = 0.7, float box_length = 0.2); 
     int size();
     int validnum();
+    void delete_tree_nodes(KD_TREE_NODE ** root);
     void root_alpha(float &alpha_bal, float &alpha_del);
     void Build(PointVector point_cloud);
     void Nearest_Search(PointType point, int k_nearest, PointVector &Nearest_Points, vector<float> & Point_Distance, double max_dist = INFINITY);

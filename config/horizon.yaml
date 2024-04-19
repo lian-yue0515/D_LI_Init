@@ -31,6 +31,10 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
+    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
