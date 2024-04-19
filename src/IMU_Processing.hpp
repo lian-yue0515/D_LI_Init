@@ -72,6 +72,7 @@ class ImuProcess
   double first_lidar_time;
   int    lidar_type;
   bool   imu_en;
+  bool   LGO_MODE = true;
   bool Dynamic_init_done = true;
   bool Dynamic_init = false;
   
@@ -88,7 +89,8 @@ class ImuProcess
 private:
   void IMU_init(const MeasureGroup &meas, StatesGroup &state, int &N);
   void propagation_and_undist(const MeasureGroup &meas, StatesGroup &state_inout, PointCloudXYZI &pcl_in_out);
-  void Forward_propagation_without_imu(const MeasureGroup &meas, StatesGroup &state_inout, PointCloudXYZI &pcl_out, V3D ba, V3D bg);
+  void Forward_propagation_with_imu(const MeasureGroup &meas, StatesGroup &state_inout, PointCloudXYZI &pcl_out, V3D ba, V3D bg);
+  void Forward_propagation_without_imu(const MeasureGroup &meas, StatesGroup &state_inout, PointCloudXYZI &pcl_out);
   PointCloudXYZI::Ptr cur_pcl_un_;
   sensor_msgs::ImuConstPtr last_imu_;
   deque<sensor_msgs::ImuConstPtr> v_imu_;
@@ -223,6 +225,53 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, StatesGroup &state_inout, in
   last_imu_ = meas.imu.back();
 }
 
+void ImuProcess::Forward_propagation_without_imu(const MeasureGroup &meas, StatesGroup &state_inout,
+                             PointCloudXYZI &pcl_out) {
+    pcl_out = *(meas.lidar);
+    /*** sort point clouds by offset time ***/
+    const double &pcl_beg_time = meas.lidar_beg_time;
+    sort(pcl_out.points.begin(), pcl_out.points.end(), time_list);
+    const double &pcl_end_offset_time = pcl_out.points.back().curvature / double(1000);
+
+    MD(DIM_STATE, DIM_STATE) F_x, cov_w;
+
+    if (b_first_frame_)
+    {
+        dt = 0.1;
+        b_first_frame_ = false;
+        frame_dt = pcl_out.points.back().curvature / double(1000) - pcl_out.points.front().curvature / double(1000);
+        frame_end_time = pcl_out.points.back().curvature;
+    }
+    else
+    {
+        dt = pcl_beg_time - time_last_scan;
+        time_last_scan = pcl_beg_time;
+        frame_dt = pcl_out.points.back().curvature / double(1000) - pcl_out.points.front().curvature / double(1000);
+        frame_end_time = pcl_out.points.back().curvature;
+
+    }
+
+    M3D Exp_f = Exp(state_inout.bias_g, dt);
+    /** Forward propagation of attitude **/
+    state_inout.rot_end = state_inout.rot_end * Exp_f;
+
+    /** Position Propagation **/
+    state_inout.pos_end += state_inout.rot_end * state_inout.vel_end * dt;
+
+    /* covariance propagation */
+    F_x.setIdentity();
+    cov_w.setZero();
+    /** In CV model, bias_g represents angular velocity **/
+    /** In CV model，bias_a represents linear acceleration **/
+    F_x.block<3, 3>(0, 0) = Exp(state_inout.bias_g, -dt);
+    F_x.block<3, 3>(0, 15) = Eye3d * dt;
+    F_x.block<3, 3>(3, 12) = state_inout.rot_end * dt;
+
+    cov_w.block<3, 3>(15, 15).diagonal() = cov_gyr_scale * dt * dt;
+    cov_w.block<3, 3>(12, 12).diagonal() = cov_acc_scale * dt * dt;
+    /** Forward propagation of covariance**/
+    state_inout.cov = F_x * state_inout.cov * F_x.transpose() + cov_w;
+}
 
 /*!
  * @brief
@@ -230,7 +279,7 @@ void ImuProcess::IMU_init(const MeasureGroup &meas, StatesGroup &state_inout, in
  * @param state_inout
  * @param pcl_out
  */
-void ImuProcess::Forward_propagation_without_imu(const MeasureGroup &meas, StatesGroup &state_inout, PointCloudXYZI &pcl_out, V3D ba, V3D bg) {
+void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGroup &state_inout, PointCloudXYZI &pcl_out, V3D ba, V3D bg) {
     pcl_out = *(meas.lidar);
     /*** sort point clouds by offset time ***/
     double pcl_beg_time = meas.lidar_beg_time;
@@ -550,26 +599,31 @@ void ImuProcess::propagation_and_undist(const MeasureGroup &meas, StatesGroup &s
 
 void ImuProcess::Process(const MeasureGroup &meas, StatesGroup &state, PointCloudXYZI::Ptr pcl_un_, V3D ba, V3D bg)
 {
-  if (imu_en)
-  {
-    if(meas.imu.empty())  return;
-    ROS_ASSERT(meas.lidar != nullptr);
-
-    if (imu_need_init_)
+  if(LGO_MODE){
+    // Forward_propagation_without_imu(meas, state, *pcl_un_);
+    Forward_propagation_with_imu(meas, state, *pcl_un_, ba, bg);
+  }else{
+    if (imu_en)
     {
-        printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, online iteration begins.\n\n" RESET);
-        last_imu_   = meas.imu.back();
-        imu_need_init_ = false;
-        cov_acc = cov_acc_scale;
-        cov_gyr = cov_gyr_scale;
-        pcl_un_ = (meas.lidar);
-        return;
+      if(meas.imu.empty())  return;
+      ROS_ASSERT(meas.lidar != nullptr);
+
+      if (imu_need_init_)
+      {
+          printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, online iteration begins.\n\n" RESET);
+          last_imu_   = meas.imu.back();
+          imu_need_init_ = false;
+          cov_acc = cov_acc_scale;
+          cov_gyr = cov_gyr_scale;
+          pcl_un_ = (meas.lidar);
+          return;
+      }
+      propagation_and_undist(meas, state, *pcl_un_);
     }
-    propagation_and_undist(meas, state, *pcl_un_);
-  }
-  else
-  {
-    Forward_propagation_without_imu(meas, state, *pcl_un_, ba, bg);
+    else
+    {
+      Forward_propagation_with_imu(meas, state, *pcl_un_, ba, bg);
+    }
   }
 }
 #endif

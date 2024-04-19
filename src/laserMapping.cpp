@@ -103,6 +103,7 @@ int distort_time = 0;
 int lidar_type, pcd_save_interval = -1, pcd_index = 0;
 bool lidar_pushed, flg_exit = false, flg_EKF_inited = true, flg_reset = true;
 bool imu_en = false;
+bool LGO_MODE = true;
 bool scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
 bool runtime_pos_log = false, pcd_save_en = false, extrinsic_est_en = true, path_en = true;
 
@@ -840,13 +841,14 @@ void iterCurrentPoint3D(Point3D& current_point, bool converge)
         // T_wj = inter(T_wb, T_we)   T_ej = T_ew * T_wj   P_e = T_ej * P_j  P_w = T_wj * P_j
         Sophus::SE3d T_j = Sophus::interpolate(T_begin, T_end, scale);
         Sophus::SE3d T_ej = T_end.inverse() * T_j;
-        if(!imu_en){
-            Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
-            current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
-        }else{
-            Sophus::SE3d T_ej_without_rotation_tran(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
-            current_point.undistort_lidar_point = T_ej_without_rotation_tran * current_point.raw_point;
-        }
+        // if(!imu_en){
+        //     Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
+        //     current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
+        // }else{
+        //     Sophus::SE3d T_ej_without_rotation_tran(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+        //     current_point.undistort_lidar_point = T_ej_without_rotation_tran * current_point.raw_point;
+        // }
+        current_point.undistort_lidar_point = T_ej * current_point.raw_point;
         current_point.world_point = T_j * current_point.raw_point;
     }
     else
@@ -1280,6 +1282,8 @@ int main(int argc, char **argv)
     nh.getParam("/Iteration_NUM", Iteration_NUM);
     nh.getParam("/Data_accum_length", dynamic_init->data_accum_length);
     nh.getParam("/Iteration", Iteration);
+    nh.getParam("/LGO_MODE", LGO_MODE);
+    p_imu->LGO_MODE = LGO_MODE;
 //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
@@ -1292,32 +1296,43 @@ int main(int argc, char **argv)
     {
         if (flg_exit) break;
         ros::spinOnce();
-        if(!dynamic_init->Data_processing_fished){
-            if(sync_packages(Measures)){
-                if (flg_reset)
-                {
-                    ROS_WARN("reset when rosbag play back.");
-                    p_imu->Reset();
-                    flg_reset = false;
-                    continue;
-                }
-                if(dynamic_init->Data_processing(Measures))
-                {
-                    dynamic_init->Data_processing_fished = true;
-                    dynamic_init->lidar_frame_count = 0;
-                }else{
-                    continue;
+        if(!LGO_MODE){
+            if(!dynamic_init->Data_processing_fished){
+                if(sync_packages(Measures)){
+                    if (flg_reset)
+                    {
+                        ROS_WARN("reset when rosbag play back.");
+                        p_imu->Reset();
+                        flg_reset = false;
+                        continue;
+                    }
+                    if(dynamic_init->Data_processing(Measures))
+                    {
+                        dynamic_init->Data_processing_fished = true;
+                        dynamic_init->lidar_frame_count = 0;
+                    }else{
+                        continue;
+                    }
                 }
             }
-        }
-        if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
-            measures_num = measures_num + 1;
-            if( measures_num == dynamic_init->data_accum_length) measures_num = 0;
-            Measures = dynamic_init->Initialized_data[measures_num];
-            data_alignment = 1;
+            if(dynamic_init->Data_processing_fished && !dynamic_init->dynamic_init_fished){
+                measures_num = measures_num + 1;
+                if( measures_num == dynamic_init->data_accum_length) measures_num = 0;
+                Measures = dynamic_init->Initialized_data[measures_num];
+                data_alignment = 1;
+            } else {
+                data_alignment = sync_packages(Measures); 
+            }
         } else {
+            if (flg_reset)
+            {
+                ROS_WARN("reset when rosbag play back.");
+                p_imu->Reset();
+                flg_reset = false;
+                continue;
+            }
             data_alignment = sync_packages(Measures); 
-        }
+        }        
         if(data_alignment) 
         {
             frame_id++;
@@ -1736,7 +1751,7 @@ int main(int argc, char **argv)
             }else{
                 //do nothing
             }
-            if(measures_num == dynamic_init->data_accum_length - 1 && !dynamic_init->dynamic_init_fished){
+            if(!LGO_MODE && measures_num == dynamic_init->data_accum_length - 1 && !dynamic_init->dynamic_init_fished){
                 if(!dynamic_init->dynamic_init_fished){
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
