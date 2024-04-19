@@ -101,7 +101,7 @@ fstream time_log;
 int distort_time = 0;
 
 int lidar_type, pcd_save_interval = -1, pcd_index = 0;
-bool lidar_pushed, flg_reset, flg_exit = false, flg_EKF_inited = true;
+bool lidar_pushed, flg_exit = false, flg_EKF_inited = true, flg_reset = true;
 bool imu_en = false;
 bool scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
 bool runtime_pos_log = false, pcd_save_en = false, extrinsic_est_en = true, path_en = true;
@@ -1329,7 +1329,7 @@ int main(int argc, char **argv)
             /// 未下采样的Point3D点
             feats_points_full = Measures.points;
 
-            if(frame_id < 20){
+            if(frame_id < dynamic_init->data_accum_length){
                 pcl::PointCloud<PointType>::Ptr cloudyuanshi(new pcl::PointCloud<PointType>());
                 *cloudyuanshi = *Measures.lidar;
                 std::string filenameyuanshi = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/yuanshi/yuanshi"+ std::to_string(frame_id)+ ".pcd";
@@ -1344,7 +1344,7 @@ int main(int argc, char **argv)
                 ROS_WARN("First frame, no points stored.");
                 continue;
             }
-            if(frame_id < 20){
+            if(frame_id < dynamic_init->data_accum_length){
                 pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
                 *cloudshowqujibian = (*feats_undistort);
                 std::string filenamequjibian = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibian/qujibian"+ std::to_string(frame_id)+ ".pcd";
@@ -1675,14 +1675,14 @@ int main(int argc, char **argv)
             *feats_down_body = point3DtoPCL(feats_points, UNDISTORT);
 
             last_state = state;
-            // if(frame_id < 10){
-            //     pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-            //     *cloudshow = *feats_down_body;
-            //     cloudshow->height = 1;
-            //     cloudshow->width = feats_down_body->size();
-            //     std::string filenamequjibian_fin = "/home/myx/Downloads/YWL_LO/src/LiDAR_IMU_Init/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
-            //     pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
-            // }
+            if(frame_id < dynamic_init->data_accum_length){
+                pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                *cloudshow = *feats_down_body;
+                cloudshow->height = 1;
+                cloudshow->width = feats_down_body->size();
+                std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
+                pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
+            }
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
 
