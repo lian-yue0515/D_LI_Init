@@ -104,6 +104,8 @@ int lidar_type, pcd_save_interval = -1, pcd_index = 0;
 bool lidar_pushed, flg_exit = false, flg_EKF_inited = true, flg_reset = true;
 bool imu_en = false;
 bool LGO_MODE = true;
+bool LO_MODE = true;
+bool LIO_MODE = true;
 bool scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
 bool runtime_pos_log = false, pcd_save_en = false, extrinsic_est_en = true, path_en = true;
 
@@ -841,14 +843,17 @@ void iterCurrentPoint3D(Point3D& current_point, bool converge)
         // T_wj = inter(T_wb, T_we)   T_ej = T_ew * T_wj   P_e = T_ej * P_j  P_w = T_wj * P_j
         Sophus::SE3d T_j = Sophus::interpolate(T_begin, T_end, scale);
         Sophus::SE3d T_ej = T_end.inverse() * T_j;
-        if(!imu_en){
-            Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
-            current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
+        if(LO_MODE){
+            current_point.undistort_lidar_point = T_ej * current_point.raw_point;
         }else{
-            Sophus::SE3d T_ej_without_rotation_tran(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
-            current_point.undistort_lidar_point = T_ej_without_rotation_tran * current_point.raw_point;
+            if(!imu_en){
+                Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
+                current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
+            }else{
+                Sophus::SE3d T_ej_without_rotation_tran(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+                current_point.undistort_lidar_point = T_ej_without_rotation_tran * current_point.raw_point;
+            }
         }
-        // current_point.undistort_lidar_point = T_ej * current_point.raw_point;
         current_point.world_point = T_j * current_point.raw_point;
     }
     else
@@ -1283,7 +1288,10 @@ int main(int argc, char **argv)
     nh.getParam("/Data_accum_length", dynamic_init->data_accum_length);
     nh.getParam("/Iteration", Iteration);
     nh.getParam("/LGO_MODE", LGO_MODE);
+    nh.getParam("/LO_MODE", LO_MODE);
+    nh.getParam("/LIO_MODE", LIO_MODE);
     p_imu->LGO_MODE = LGO_MODE;
+    p_imu->LO_MODE = LO_MODE;
 //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
@@ -1474,12 +1482,13 @@ int main(int argc, char **argv)
                     iterCurrentPoint3D(feats_points[i], current_converge);
                     // 去畸变后的点
                     PointType point_body = point3DtoPCLPoint(feats_points[i], UNDISTORT);
-                    // 世界坐标系下的点
-                    PointType point_world = point3DtoPCLPoint(feats_points[i], WORLD);
-
+                    PointType point_world;
                     V3D p_body(point_body.x, point_body.y, point_body.z);
                     if(imu_en){
                         pointBodyToWorld(&point_body, &point_world);
+                    } else {
+                        // 世界坐标系下的点
+                        point_world = point3DtoPCLPoint(feats_points[i], WORLD);
                     }
                     vector<float> pointSearchSqDis(NUM_MATCH_POINTS);
                     auto &points_near = Nearest_Points[i];
@@ -1665,12 +1674,14 @@ int main(int argc, char **argv)
                         state.cov = (I_STATE - G) * state.cov;
                         total_distance += (state.pos_end - position_last).norm();
                         position_last = state.pos_end;
-                        M3D rot_cur_lidar = state.rot_end * state.offset_R_L_I;
-                        V3D euler_cur_lidar = RotMtoEuler(rot_cur_lidar);
 
                         if (!imu_en) {
+                            // M3D rot_cur_lidar = state.rot_end * state.offset_R_L_I;
+                            // V3D euler_cur_lidar = RotMtoEuler(rot_cur_lidar);
+                            // geoQuat = tf::createQuaternionMsgFromRollPitchYaw
+                            //         (euler_cur_lidar(0), euler_cur_lidar(1), euler_cur_lidar(2));
                             geoQuat = tf::createQuaternionMsgFromRollPitchYaw
-                                    (euler_cur_lidar(0), euler_cur_lidar(1), euler_cur_lidar(2));
+                                    (euler_cur(0), euler_cur(1), euler_cur(2));
                         } else {
                             //Publish LiDAR's pose, instead of IMU's pose
                             M3D rot_cur_lidar = state.rot_end * state.offset_R_L_I;

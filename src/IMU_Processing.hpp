@@ -73,6 +73,8 @@ class ImuProcess
   int    lidar_type;
   bool   imu_en;
   bool   LGO_MODE = true;
+  bool   LO_MODE = true;
+  bool   LIO_MODE = true;
   bool Dynamic_init_done = true;
   bool Dynamic_init = false;
   
@@ -399,11 +401,11 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
     }
 
     //  前向传播更改为SE3传播
-    M3D Exp_f = Exp(state_inout.bias_g, dt);
-    /** Forward propagation of attitude **/
-    state_inout.rot_end = state_inout.rot_end * Exp_f;
+    // M3D Exp_f = Exp(state_inout.bias_g, dt);
+    // /** Forward propagation of attitude **/
+    // state_inout.rot_end = state_inout.rot_end * Exp_f;
 
-    // state_inout.rot_end = rot_end;    //imu
+    state_inout.rot_end = rot_end;    //imu
 
     /** Position Propagation **/
     state_inout.pos_end += state_inout.rot_end * state_inout.vel_end * dt;
@@ -600,8 +602,11 @@ void ImuProcess::propagation_and_undist(const MeasureGroup &meas, StatesGroup &s
 void ImuProcess::Process(const MeasureGroup &meas, StatesGroup &state, PointCloudXYZI::Ptr pcl_un_, V3D ba, V3D bg)
 {
   if(LGO_MODE){
-    Forward_propagation_without_imu(meas, state, *pcl_un_);
-    // Forward_propagation_with_imu(meas, state, *pcl_un_, ba, bg);
+    if(LO_MODE){
+      Forward_propagation_without_imu(meas, state, *pcl_un_);
+    }else{
+      Forward_propagation_with_imu(meas, state, *pcl_un_, ba, bg);
+    }
   }else{
     if (imu_en)
     {
