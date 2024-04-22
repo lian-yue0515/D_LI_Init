@@ -9,7 +9,7 @@
 	<param name="Iteration" type="double" value="0.001" />
 	<param name="LGO_MODE" type="bool" value="true" />
 	
-    <param name="Data_accum_length" type="int" value="20" />
+    <param name="Data_accum_length" type="int" value="100" />
 	<node pkg="lidar_imu_init" type="li_init" name="laserMapping" output="screen" />
 
 	<group if="$(arg rviz)">

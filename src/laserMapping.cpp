@@ -841,14 +841,14 @@ void iterCurrentPoint3D(Point3D& current_point, bool converge)
         // T_wj = inter(T_wb, T_we)   T_ej = T_ew * T_wj   P_e = T_ej * P_j  P_w = T_wj * P_j
         Sophus::SE3d T_j = Sophus::interpolate(T_begin, T_end, scale);
         Sophus::SE3d T_ej = T_end.inverse() * T_j;
-        // if(!imu_en){
-        //     Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
-        //     current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
-        // }else{
-        //     Sophus::SE3d T_ej_without_rotation_tran(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
-        //     current_point.undistort_lidar_point = T_ej_without_rotation_tran * current_point.raw_point;
-        // }
-        current_point.undistort_lidar_point = T_ej * current_point.raw_point;
+        if(!imu_en){
+            Sophus::SE3d T_ej_without_rotation(Eigen::Matrix3d::Identity(), T_ej.translation());
+            current_point.undistort_lidar_point = T_ej_without_rotation * current_point.raw_point;
+        }else{
+            Sophus::SE3d T_ej_without_rotation_tran(Eigen::Matrix3d::Identity(), Eigen::Vector3d::Zero());
+            current_point.undistort_lidar_point = T_ej_without_rotation_tran * current_point.raw_point;
+        }
+        // current_point.undistort_lidar_point = T_ej * current_point.raw_point;
         current_point.world_point = T_j * current_point.raw_point;
     }
     else
@@ -1478,7 +1478,9 @@ int main(int argc, char **argv)
                     PointType point_world = point3DtoPCLPoint(feats_points[i], WORLD);
 
                     V3D p_body(point_body.x, point_body.y, point_body.z);
-
+                    if(imu_en){
+                        pointBodyToWorld(&point_body, &point_world);
+                    }
                     vector<float> pointSearchSqDis(NUM_MATCH_POINTS);
                     auto &points_near = Nearest_Points[i];
                     uint8_t search_flag = 0;

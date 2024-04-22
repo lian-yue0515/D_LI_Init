@@ -402,7 +402,7 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
     M3D Exp_f = Exp(state_inout.bias_g, dt);
     /** Forward propagation of attitude **/
     state_inout.rot_end = state_inout.rot_end * Exp_f;
-    
+
     // state_inout.rot_end = rot_end;    //imu
 
     /** Position Propagation **/
@@ -600,8 +600,8 @@ void ImuProcess::propagation_and_undist(const MeasureGroup &meas, StatesGroup &s
 void ImuProcess::Process(const MeasureGroup &meas, StatesGroup &state, PointCloudXYZI::Ptr pcl_un_, V3D ba, V3D bg)
 {
   if(LGO_MODE){
-    // Forward_propagation_without_imu(meas, state, *pcl_un_);
-    Forward_propagation_with_imu(meas, state, *pcl_un_, ba, bg);
+    Forward_propagation_without_imu(meas, state, *pcl_un_);
+    // Forward_propagation_with_imu(meas, state, *pcl_un_, ba, bg);
   }else{
     if (imu_en)
     {
