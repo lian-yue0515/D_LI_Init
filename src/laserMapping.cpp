@@ -476,14 +476,14 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
 void imu_cbk(const sensor_msgs::Imu::ConstPtr &msg_in, const ros::Publisher &pubIMU_sync) {
     publish_count++;
     mtx_buffer.lock();
-   static double IMU_period, time_msg_in, last_time_msg_in;
+    static double IMU_period, time_msg_in, last_time_msg_in;
     static int imu_cnt = 0;
     time_msg_in = msg_in->header.stamp.toSec();
 
     if (imu_cnt < 100) {
         imu_cnt++;
         mean_acc += (V3D(msg_in->linear_acceleration.x, msg_in->linear_acceleration.y, msg_in->linear_acceleration.z) -
-                     mean_acc) / (imu_cnt);
+                    mean_acc) / (imu_cnt);
         if (imu_cnt > 1) {
             IMU_period += (time_msg_in - last_time_msg_in - IMU_period) / (imu_cnt - 1);
         }
@@ -565,7 +565,10 @@ bool sync_packages(MeasureGroup &meas)
     /** push imu data, and pop from imu buffer **/
     double imu_time = imu_buffer.front()->header.stamp.toSec();
     meas.imu.clear();
-
+    if(imu_time > lidar_end_time){
+        cout<<imu_buffer.size()<<endl;
+        cout<<"imu data is empty!"<<endl;
+    }
     while ((!imu_buffer.empty()) && (imu_time < lidar_end_time)) {
         imu_time = imu_buffer.front()->header.stamp.toSec();
         if (imu_time > lidar_end_time) break;
@@ -1186,6 +1189,7 @@ int main(int argc, char **argv)
     nh.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
     nh.param<double>("mapping/gyr_cov", gyr_cov, 0.1);
     nh.param<double>("mapping/acc_cov", acc_cov, 0.1);
+    nh.param<double>("mapping/b_gyr_cov", b_gyr_cov, 0.0001);
     nh.param<double>("preprocess/blind", p_pre->blind, 1.0);
     nh.param<int>("preprocess/lidar_type", lidar_type, AVIA);
     nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
@@ -1230,6 +1234,7 @@ int main(int argc, char **argv)
     p_imu->imu_en = imu_en;
     p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
     p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
+    p_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
     p_imu->set_mean_acc_norm(1);
     G.setZero();
     H_T_H.setZero();

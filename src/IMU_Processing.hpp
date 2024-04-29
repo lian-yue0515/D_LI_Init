@@ -287,6 +287,7 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
     double pcl_beg_time = meas.lidar_beg_time;
     sort(pcl_out.points.begin(), pcl_out.points.end(), time_list);
     double pcl_end_time = pcl_beg_time + pcl_out.points.back().curvature / double(1000);
+    V3D vel_imu(state_inout.vel_end), pos_imu(state_inout.pos_end);
     M3D rot_end;
     MD(DIM_STATE, DIM_STATE) F_x, cov_w;
 
@@ -364,6 +365,23 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
                 acc_0 = linear_acceleration_;
                 gyr_0 = angular_velocity_;
             }
+
+            /* covariance propagation */
+            F_x.setIdentity();
+            cov_w.setZero();
+            /** In CV model, bias_g represents angular velocity **/
+            /** In CV model，bias_a represents linear acceleration **/
+            F_x.block<3, 3>(0, 0) = Exp(angvel_avr, -dt);
+            F_x.block<3, 3>(0, 15) = - Eye3d * dt;
+            F_x.block<3, 3>(3, 12) = R_imu * dt;     //?
+
+            pos_imu += R_imu * vel_imu * dt;
+            cov_w.block<3, 3>(0, 0).diagonal() = cov_gyr_scale * dt * dt;
+            cov_w.block<3, 3>(15, 15).diagonal() = cov_bias_gyr * dt * dt;
+            cov_w.block<3, 3>(12, 12) = R_imu * cov_acc_scale.asDiagonal() * R_imu.transpose() * dt * dt;
+            /** Forward propagation of covariance**/
+            state_inout.cov = F_x * state_inout.cov * F_x.transpose() + cov_w;
+            
             tmp_pre_integration->push_back(dt, linear_acceleration_ / IMU_mean_acc_norm * G_m_s2, angular_velocity_);
             angvel_last = angvel_avr;
             double &&offs_t = tail->header.stamp.toSec() - pcl_beg_time;
@@ -373,6 +391,14 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
         double note = pcl_end_time > imu_end_time ? 1.0 : -1.0;
         dt = note * (pcl_end_time - imu_end_time);
         rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);
+        pos_imu = pos_imu + note * rot_end * vel_imu * dt;
+        // state_inout.vel_end = rot_end * vel_imu;
+        state_inout.rot_end = rot_end;    //imu
+
+        /** Position Propagation **/
+        state_inout.pos_end = pos_imu;
+
+
         last_imu_ = meas.imu.back();
         last_lidar_end_time_ = pcl_end_time;
         double dt_j = 0.0;
@@ -400,29 +426,6 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
         }
     }
 
-    //  前向传播更改为SE3传播
-    // M3D Exp_f = Exp(state_inout.bias_g, dt);
-    // /** Forward propagation of attitude **/
-    // state_inout.rot_end = state_inout.rot_end * Exp_f;
-
-    state_inout.rot_end = rot_end;    //imu
-
-    /** Position Propagation **/
-    state_inout.pos_end += state_inout.rot_end * state_inout.vel_end * dt;
-
-    /* covariance propagation */
-    F_x.setIdentity();
-    cov_w.setZero();
-    /** In CV model, bias_g represents angular velocity **/
-    /** In CV model，bias_a represents linear acceleration **/
-    F_x.block<3, 3>(0, 0) = Exp(state_inout.bias_g, -dt);
-    F_x.block<3, 3>(0, 15) = Eye3d * dt;
-    F_x.block<3, 3>(3, 12) = state_inout.rot_end * dt;
-
-    cov_w.block<3, 3>(15, 15).diagonal() = cov_gyr_scale * dt * dt;
-    cov_w.block<3, 3>(12, 12).diagonal() = cov_acc_scale * dt * dt;
-    /** Forward propagation of covariance**/
-    state_inout.cov = F_x * state_inout.cov * F_x.transpose() + cov_w;
 }
 
 void ImuProcess::Reforward_propagation_without_imu(StatesGroup& last_state, StatesGroup &state_inout, V3D& cov_v, V3D& cov_omega)
