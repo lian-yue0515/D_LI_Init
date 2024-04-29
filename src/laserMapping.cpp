@@ -541,16 +541,12 @@ bool sync_packages(MeasureGroup &meas)
             return false;
         }
 
-        if (meas.lidar->points.back().curvature / double(1000) < 0.5 * lidar_mean_scantime)
-        {
-            lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
-        }
+        meas.lidar_beg_time = time_buffer.front(); //unit:s
+
+        if (lidar_type == L515)
+            lidar_end_time = meas.lidar_beg_time;
         else
-        {
-            scan_num ++;
-            lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000);
-            lidar_mean_scantime += (meas.lidar->points.back().curvature / double(1000) - lidar_mean_scantime) / scan_num;
-        }
+            lidar_end_time = meas.lidar_beg_time + meas.lidar->points.back().curvature / double(1000); //unit:s
 
         meas.lidar_end_time = lidar_end_time;
         lidar_pushed = true;
@@ -566,8 +562,11 @@ bool sync_packages(MeasureGroup &meas)
     double imu_time = imu_buffer.front()->header.stamp.toSec();
     meas.imu.clear();
     if(imu_time > lidar_end_time){
-        cout<<imu_buffer.size()<<endl;
-        cout<<"imu data is empty!"<<endl;
+        lidar_buffer.pop_front();
+        lidar_points_buffer.pop_front();
+        time_buffer.pop_front();
+        lidar_pushed = false;
+        return false;
     }
     while ((!imu_buffer.empty()) && (imu_time < lidar_end_time)) {
         imu_time = imu_buffer.front()->header.stamp.toSec();
@@ -575,7 +574,6 @@ bool sync_packages(MeasureGroup &meas)
         meas.imu.push_back(imu_buffer.front());
         imu_buffer.pop_front();
     }
-
     lidar_buffer.pop_front();
     lidar_points_buffer.pop_front();
     time_buffer.pop_front();
@@ -1754,11 +1752,14 @@ int main(int argc, char **argv)
 
             frame_num++;
             V3D ext_euler = RotMtoEuler(state.offset_R_L_I);
-            fout_out << euler_cur.transpose() * 57.3 << " " << state.pos_end.transpose() << " "
-                     << ext_euler.transpose() * 57.3 << " " \
-                     << state.offset_T_L_I.transpose() << " " << state.vel_end.transpose() << " "  \
-                     << " " << state.bias_g.transpose() << " " << state.bias_a.transpose() * 0.9822 / 9.81 << " "
-                     << state.gravity.transpose() << " " << total_distance << endl;
+            // fout_out << euler_cur.transpose() * 57.3 << " " 
+            //         << state.pos_end.transpose() << " "
+            //          << ext_euler.transpose() * 57.3 << " " \
+            //          << state.offset_T_L_I.transpose() << " " 
+            //          << state.vel_end.transpose() << " "  \
+            //          << " " << state.bias_g.transpose() << " " << state.bias_a.transpose() * 0.9822 / 9.81 << " "
+            //          << state.gravity.transpose() << " " << total_distance << endl;
+            fout_out << state.vel_end.transpose() << " " << endl;
             if(!imu_en){
                 if(!Iteration_begin){
                     dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
@@ -1800,6 +1801,9 @@ int main(int argc, char **argv)
                         imu_en = true;
                         p_imu->imu_en = imu_en;
                         p_imu->Reset();
+                        p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
+                        p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
+                        p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                         // flg_reset = true;
                         ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
                         feats_undistort == NULL;
@@ -1831,6 +1835,9 @@ int main(int argc, char **argv)
                     state.cov(21, 21) = state.cov(22, 22) = state.cov(23, 23) = 0.001;  //g
                     p_imu->Dynamic_init = true;
                     p_imu->Reset();
+                    p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
+                    p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
+                    p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                     ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
                     feats_undistort == NULL;
                     // return 0;
