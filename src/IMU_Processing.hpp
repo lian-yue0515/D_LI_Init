@@ -374,11 +374,13 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
             F_x.block<3, 3>(0, 0) = Exp(angvel_avr, -dt);
             F_x.block<3, 3>(0, 15) = - Eye3d * dt;
             F_x.block<3, 3>(3, 12) = R_imu * dt;     //?
+            // F_x.block<3, 3>(3, 12) = state_inout.rot_end * dt;
 
             pos_imu += R_imu * vel_imu * dt;
             cov_w.block<3, 3>(0, 0).diagonal() = cov_gyr_scale * dt * dt;
             cov_w.block<3, 3>(15, 15).diagonal() = cov_bias_gyr * dt * dt;
             cov_w.block<3, 3>(12, 12) = R_imu * cov_acc_scale.asDiagonal() * R_imu.transpose() * dt * dt;
+            // cov_w.block<3, 3>(12, 12).diagonal() = cov_acc_scale * dt * dt;
             /** Forward propagation of covariance**/
             state_inout.cov = F_x * state_inout.cov * F_x.transpose() + cov_w;
             
@@ -392,12 +394,12 @@ void ImuProcess::Forward_propagation_with_imu(const MeasureGroup &meas, StatesGr
         dt = note * (pcl_end_time - imu_end_time);
         rot_end = R_imu * Exp(V3D(note * angvel_avr), dt);
         pos_imu = pos_imu + note * rot_end * vel_imu * dt;
-        // state_inout.vel_end = rot_end * vel_imu;
+        state_inout.vel_end = state_inout.rot_end.transpose() * rot_end * vel_imu;
         state_inout.rot_end = rot_end;    //imu
 
         /** Position Propagation **/
         state_inout.pos_end = pos_imu;
-
+        // state_inout.pos_end += state_inout.rot_end * state_inout.vel_end * dt;
 
         last_imu_ = meas.imu.back();
         last_lidar_end_time_ = pcl_end_time;
