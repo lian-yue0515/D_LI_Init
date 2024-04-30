@@ -458,7 +458,7 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
             pts_lidar.pop_front();
         }
     }
-    else
+    else 
     {
         PointCloudXYZI::Ptr ptr(new PointCloudXYZI());
         std::vector<Point3D> points;
@@ -467,7 +467,6 @@ void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr &msg)
         lidar_buffer.push_back(ptr);
         time_buffer.push_back(msg->header.stamp.toSec());
         lidar_points_buffer.push_back(points);
-
     }
     mtx_buffer.unlock();
     sig_buffer.notify_all();
@@ -1233,6 +1232,7 @@ int main(int argc, char **argv)
     p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
     p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
     p_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
+    p_imu->set_acc_bias_cov(V3D(b_acc_cov, b_acc_cov, b_acc_cov));
     p_imu->set_mean_acc_norm(1);
     G.setZero();
     H_T_H.setZero();
@@ -1295,6 +1295,14 @@ int main(int argc, char **argv)
     nh.getParam("/LIO_MODE", LIO_MODE);
     p_imu->LGO_MODE = LGO_MODE;
     p_imu->LO_MODE = LO_MODE;
+    p_imu->LIO_MODE = LIO_MODE;
+    if(LIO_MODE){
+        dynamic_init->dynamic_init_fished = true;
+        dynamic_init->Data_processing_fished = true;
+        p_imu->Dynamic_init_done = false;
+        imu_en = true;
+        p_imu->imu_en = imu_en;
+    }
 //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
@@ -1797,13 +1805,14 @@ int main(int argc, char **argv)
                         state.cov(15, 15) = state.cov(16, 16) = state.cov(17, 17) = 0.001;  //bg
                         state.cov(18, 18) = state.cov(19, 19) = state.cov(20, 20) = 0.001;  //ba
                         state.cov(21, 21) = state.cov(22, 22) = state.cov(23, 23) = 0.001;  //g
-                        p_imu->Dynamic_init = true;
+                        p_imu->Dynamic_init_done = true;
                         imu_en = true;
                         p_imu->imu_en = imu_en;
                         p_imu->Reset();
                         p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
                         p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
                         p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
+                        p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                         // flg_reset = true;
                         ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
                         feats_undistort == NULL;
@@ -1833,11 +1842,12 @@ int main(int argc, char **argv)
                     state.cov(15, 15) = state.cov(16, 16) = state.cov(17, 17) = 0.001;  //bg
                     state.cov(18, 18) = state.cov(19, 19) = state.cov(20, 20) = 0.001;  //ba
                     state.cov(21, 21) = state.cov(22, 22) = state.cov(23, 23) = 0.001;  //g
-                    p_imu->Dynamic_init = true;
+                    p_imu->Dynamic_init_done = true;
                     p_imu->Reset();
                     p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
                     p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
                     p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
+                    p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                     ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
                     feats_undistort == NULL;
                     // return 0;

@@ -76,7 +76,6 @@ class ImuProcess
   bool   LO_MODE = true;
   bool   LIO_MODE = true;
   bool Dynamic_init_done = true;
-  bool Dynamic_init = false;
   
   double IMU_mean_acc_norm;
   double frame_dt = 0.0;
@@ -618,15 +617,32 @@ void ImuProcess::Process(const MeasureGroup &meas, StatesGroup &state, PointClou
       if(meas.imu.empty())  return;
       ROS_ASSERT(meas.lidar != nullptr);
 
-      if (imu_need_init_)
-      {
-          printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, online iteration begins.\n\n" RESET);
-          last_imu_   = meas.imu.back();
-          imu_need_init_ = false;
-          cov_acc = cov_acc_scale;
-          cov_gyr = cov_gyr_scale;
-          pcl_un_ = (meas.lidar);
-          return;
+      if (imu_need_init_){
+        if(!Dynamic_init_done){
+            /// The very first lidar frame
+            IMU_init(meas, state, init_iter_num);
+            imu_need_init_ = true;
+            last_imu_   = meas.imu.back();
+            if (init_iter_num > MAX_INI_COUNT)
+            {
+                cov_acc *= pow(G_m_s2 / mean_acc.norm(), 2);
+                imu_need_init_ = false;
+
+                cov_acc = cov_acc_scale;
+                cov_gyr = cov_gyr_scale;
+
+                IMU_mean_acc_norm = mean_acc.norm();
+            }
+        }
+        else{
+            cout << endl;
+            printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, online refinement begins.\n\n" RESET);
+            last_imu_   = meas.imu.back();
+            imu_need_init_ = false;
+            cov_acc = cov_acc_scale;
+            cov_gyr = cov_gyr_scale;
+        }
+        return;
       }
       propagation_and_undist(meas, state, *pcl_un_);
     }
