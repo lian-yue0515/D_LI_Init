@@ -864,6 +864,50 @@ void iterCurrentPoint3D(Point3D& current_point, bool converge)
 
 int process_increments = 0;
 
+void map_incremental_imu() {
+    PointVector PointToAdd;
+    PointVector PointNoNeedDownsample;
+    PointToAdd.reserve(feats_down_size);
+    PointNoNeedDownsample.reserve(feats_down_size);
+    for (int i = 0; i < feats_down_size; i++) {
+        /* transform to world frame */
+        pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
+        /* decide if need add to map */
+        if (!Nearest_Points[i].empty() && flg_EKF_inited) {
+            const PointVector &points_near = Nearest_Points[i];
+            bool need_add = true;
+            BoxPointType Box_of_Point;
+            PointType downsample_result, mid_point;
+            mid_point.x = floor(feats_down_world->points[i].x / filter_size_map_min) * filter_size_map_min +
+                          0.5 * filter_size_map_min;
+            mid_point.y = floor(feats_down_world->points[i].y / filter_size_map_min) * filter_size_map_min +
+                          0.5 * filter_size_map_min;
+            mid_point.z = floor(feats_down_world->points[i].z / filter_size_map_min) * filter_size_map_min +
+                          0.5 * filter_size_map_min;
+            float dist = calc_dist(feats_down_world->points[i], mid_point);
+            if (fabs(points_near[0].x - mid_point.x) > 0.5 * filter_size_map_min &&
+                fabs(points_near[0].y - mid_point.y) > 0.5 * filter_size_map_min &&
+                fabs(points_near[0].z - mid_point.z) > 0.5 * filter_size_map_min) {
+                PointNoNeedDownsample.push_back(feats_down_world->points[i]);
+                continue;
+            }
+            for (int readd_i = 0; readd_i < NUM_MATCH_POINTS; readd_i++) {
+                if (points_near.size() < NUM_MATCH_POINTS) break;
+                if (calc_dist(points_near[readd_i], mid_point) < dist) {
+                    need_add = false;
+                    break;
+                }
+            }
+            if (need_add) PointToAdd.push_back(feats_down_world->points[i]);
+        } else {
+            PointToAdd.push_back(feats_down_world->points[i]);
+        }
+    }
+
+    add_point_size = ikdtree.Add_Points(PointToAdd, true);
+    ikdtree.Add_Points(PointNoNeedDownsample, false);
+    add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
+}
 
 void map_incremental()
 {
@@ -1369,6 +1413,7 @@ int main(int argc, char **argv)
                 std::string filenameyuanshi = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/yuanshi/yuanshi"+ std::to_string(frame_id)+ ".pcd";
                 pcl::io::savePCDFile(filenameyuanshi, *(cloudyuanshi));
             }
+
             p_imu->Process(Measures, state, feats_undistort, dynamic_init->get_acc_bias(), dynamic_init->get_gyro_bias());
 
             if (feats_undistort->empty() || (feats_undistort == NULL))
@@ -1392,24 +1437,24 @@ int main(int argc, char **argv)
             state_propagat = state;
 
             std::chrono::steady_clock::time_point t_imu_process_end = std::chrono::steady_clock::now();
-
+            std::chrono::steady_clock::time_point t_downfilter_begin = std::chrono::steady_clock::now();
             /*** Segment the map in lidar FOV ***/
             lasermap_fov_segment();
-
-            std::chrono::steady_clock::time_point t_downfilter_begin = std::chrono::steady_clock::now();
-
-            /// Point3D表达的下采样方式 梅森旋转随机排序 + 哈希体素下采样
-            boost::mt19937_64 seed;
-            std::shuffle(feats_points.begin(), feats_points.end(), seed);
-            subSampleFrame(feats_points, filter_size_surf_min);
-            std::shuffle(feats_points.begin(), feats_points.end(), seed);
-
+            if(imu_en){
+                downSizeFilterSurf.setInputCloud(feats_undistort);
+                downSizeFilterSurf.filter(*feats_down_body);
+                feats_points_size = feats_down_body->points.size();
+                feats_points_full_size = feats_undistort->points.size();
+            }else{
+                /// Point3D表达的下采样方式 梅森旋转随机排序 + 哈希体素下采样
+                boost::mt19937_64 seed;
+                std::shuffle(feats_points.begin(), feats_points.end(), seed);
+                subSampleFrame(feats_points, filter_size_surf_min);
+                std::shuffle(feats_points.begin(), feats_points.end(), seed);
+                feats_points_size = feats_points.size();
+                feats_points_full_size = feats_points_full.size();
+            }
             std::chrono::steady_clock::time_point t_downfilter_end = std::chrono::steady_clock::now();
-
-            feats_points_size = feats_points.size();
-
-            feats_points_full_size = feats_points_full.size();
-
             /// 初始化第一帧点使用未下采样的点
             /*** initialize the map kdtree ***/
             if (ikdtree.Root_Node == nullptr )
@@ -1421,7 +1466,11 @@ int main(int argc, char **argv)
                     for (int i = 0; i < feats_points_full_size; i++)
                     {
                         // 第一帧不去畸变
-                        feats_down_world->points[i] = point3DtoPCLPoint(feats_points_full[i], RAW);
+                        if(imu_en){
+                            pointBodyToWorld(&(feats_undistort->points[i]), &(feats_down_world->points[i]));
+                        }else{
+                            feats_down_world->points[i] = point3DtoPCLPoint(feats_points_full[i], RAW);
+                        }
                     }
                     ikdtree.Build(feats_down_world->points);
                 }
@@ -1489,18 +1538,21 @@ int main(int argc, char **argv)
                 #endif
                 for (int i = 0; i < feats_points_size; i++)
                 {
-                    // 去畸变 计算世界坐标系下的点
-                    iterCurrentPoint3D(feats_points[i], current_converge);
-                    // 去畸变后的点
-                    PointType point_body = point3DtoPCLPoint(feats_points[i], UNDISTORT);
+                    PointType point_body;
                     PointType point_world;
-                    V3D p_body(point_body.x, point_body.y, point_body.z);
                     if(imu_en){
+                        point_body = feats_down_body->points[i];
+                        point_world = feats_down_world->points[i];
+                        /// transform to world frame
                         pointBodyToWorld(&point_body, &point_world);
                     } else {
-                        // 世界坐标系下的点
+                        // 去畸变 计算世界坐标系下的点
+                        iterCurrentPoint3D(feats_points[i], current_converge);
+                        // 去畸变后的点
+                        point_body = point3DtoPCLPoint(feats_points[i], UNDISTORT);
                         point_world = point3DtoPCLPoint(feats_points[i], WORLD);
                     }
+                    V3D p_body(point_body.x, point_body.y, point_body.z);
                     vector<float> pointSearchSqDis(NUM_MATCH_POINTS);
                     auto &points_near = Nearest_Points[i];
                     uint8_t search_flag = 0;
@@ -1551,7 +1603,11 @@ int main(int argc, char **argv)
                 {
                     if (point_selected_surf[i])
                     {
-                        laserCloudOri->points[effect_feat_num] = point3DtoPCLPoint(feats_points[i], UNDISTORT);
+                        if(imu_en){
+                            laserCloudOri->points[effect_feat_num] = feats_down_body->points[i];
+                        }else{
+                            laserCloudOri->points[effect_feat_num] = point3DtoPCLPoint(feats_points[i], UNDISTORT);
+                        }
                         corr_normvect->points[effect_feat_num] = normvec->points[i];
                         effect_feat_num++;
                     }
@@ -1710,17 +1766,17 @@ int main(int argc, char **argv)
             }
 
             std::chrono::steady_clock::time_point icp_end = std::chrono::steady_clock::now();
-
-            *feats_down_body = point3DtoPCL(feats_points, UNDISTORT);
-
-            last_state = state;
-            if(frame_id < dynamic_init->data_accum_length){
-                pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                *cloudshow = *feats_down_body;
-                cloudshow->height = 1;
-                cloudshow->width = feats_down_body->size();
-                std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
-                pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
+            if(!imu_en){
+                *feats_down_body = point3DtoPCL(feats_points, UNDISTORT);
+                last_state = state;
+                if(frame_id < dynamic_init->data_accum_length){
+                    pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                    *cloudshow = *feats_down_body;
+                    cloudshow->height = 1;
+                    cloudshow->width = feats_down_body->size();
+                    std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
+                    pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
+                }
             }
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
@@ -1728,7 +1784,12 @@ int main(int argc, char **argv)
             std::chrono::steady_clock::time_point map_increment_begin = std::chrono::steady_clock::now();
 
             /*** add the feature points to map kdtree ***/
-            map_incremental();
+            if(imu_en){
+                map_incremental_imu();
+            }else{
+                map_incremental();
+            }
+
 
 
             kdtree_size_end = ikdtree.size();
@@ -1757,7 +1818,7 @@ int main(int argc, char **argv)
               " total distort iter = " << distort_time <<
             log_id++;
 
-
+            cout<<" after up: "<<" pos : "<< state.pos_end.transpose() << " vel : " << state.vel_end.transpose()<< endl << endl;
             frame_num++;
             V3D ext_euler = RotMtoEuler(state.offset_R_L_I);
             // fout_out << euler_cur.transpose() * 57.3 << " " 
