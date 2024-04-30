@@ -22,12 +22,12 @@ initialization:
 mapping:
     filter_size_surf: 0.3
     filter_size_map: 0.3
-    # gyr_cov: 0.0001             # lgo角速度噪声协方差
-    # acc_cov: 1             # lgo线速度噪声协方差
+    gyr_cov: 0.0001             # lgo角速度噪声协方差
+    acc_cov: 1             # lgo线速度噪声协方差
     # gyr_cov: 0.01             # lo角速度噪声协方差
     # acc_cov: 0.01             # lo线速度噪声协方差
-    gyr_cov: 0.1             # lio角速度噪声协方差
-    acc_cov: 0.1             # lio线速度噪声协方差
+    # gyr_cov: 0.1             # lio角速度噪声协方差
+    # acc_cov: 0.1             # lio线速度噪声协方差
     det_range: 100.0
     cov_lidar: 0.001            # 雷达观测噪声协方差
     max_iteration: 20           # iekf最大迭代次数

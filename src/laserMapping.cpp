@@ -1829,15 +1829,13 @@ int main(int argc, char **argv)
             //          << " " << state.bias_g.transpose() << " " << state.bias_a.transpose() * 0.9822 / 9.81 << " "
             //          << state.gravity.transpose() << " " << total_distance << endl;
             fout_out << state.vel_end.transpose() << " " << endl;
-            if(!imu_en){
+            if(!dynamic_init->dynamic_init_fished){
                 if(!Iteration_begin){
                     dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
                 }else{
                     dynamic_init->system_state[measures_num].R = state.rot_end;
                     dynamic_init->system_state[measures_num].T = state.pos_end;
                 }
-            }else{
-                //do nothing
             }
             if(!LGO_MODE && measures_num == dynamic_init->data_accum_length - 1 && !dynamic_init->dynamic_init_fished){
                 if(!dynamic_init->dynamic_init_fished){
@@ -1874,6 +1872,7 @@ int main(int argc, char **argv)
                         p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
                         p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                         p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));
+                        p_imu->imu_need_init_ = true;
                         // flg_reset = true;
                         ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
                         feats_undistort == NULL;
@@ -1909,6 +1908,7 @@ int main(int argc, char **argv)
                     p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
                     p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                     p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));
+                    p_imu->imu_need_init_ = true;
                     ikdtree.delete_tree_nodes(&ikdtree.Root_Node);
                     feats_undistort == NULL;
                     // return 0;

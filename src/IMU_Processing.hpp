@@ -81,7 +81,7 @@ class ImuProcess
   double frame_dt = 0.0;
   double frame_end_time = 0.0;
   double dt = 0.0;
-
+  bool   imu_need_init_ = true;
   V3D acc_0;
   V3D gyr_0;
   vector<GYR_> GYR_pose;
@@ -106,7 +106,6 @@ private:
   double time_last_scan;
   int    init_iter_num = 1;
   bool   b_first_frame_ = true;
-  bool   imu_need_init_ = true;
 };
 
 ImuProcess::ImuProcess()
@@ -630,20 +629,20 @@ void ImuProcess::Process(const MeasureGroup &meas, StatesGroup &state, PointClou
             {
                 cov_acc *= pow(G_m_s2 / mean_acc.norm(), 2);
                 imu_need_init_ = false;
-
                 cov_acc = cov_acc_scale;
                 cov_gyr = cov_gyr_scale;
-
                 IMU_mean_acc_norm = mean_acc.norm();
             }
-        }
-        else{
+        }else{
             cout << endl;
             printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, online refinement begins.\n\n" RESET);
             last_imu_   = meas.imu.back();
             imu_need_init_ = false;
             cov_acc = cov_acc_scale;
             cov_gyr = cov_gyr_scale;
+            if(!LIO_MODE){
+                *pcl_un_ = *(meas.lidar);
+            }
         }
         return;
       }
