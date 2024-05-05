@@ -7,15 +7,13 @@ preprocess:
     scan_line: 6
     blind: 1
     point_filter_num: 3
-    # mean_acc_norm: 9.805     #mid70
-    mean_acc_norm: 1.0     #mid360
 
 initialization:
     cut_frame: true
     cut_frame_num: 5           # 分帧数
     cut_frame_init_num: 5       # 如果分帧的话 
     orig_odom_freq: 10
-    mean_acc_norm: 1
+    mean_acc_norm: 9.805
     online_refine_time: 20
     data_accum_length: 500
     Rot_LI_cov: [ 0.00005, 0.00005, 0.00005 ]

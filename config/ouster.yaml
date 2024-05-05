@@ -1,18 +1,18 @@
 common:
-    lid_topic:  "/os_cloud_node/points"
-    imu_topic:  "/os_cloud_node/imu"
+    # lid_topic:  "/os_cloud_node/points"
+    # imu_topic:  "/os_cloud_node/imu"
+    lid_topic:  "/os1_cloud_node1/points"
+    imu_topic:  "/os1_cloud_node1/imu"
 preprocess:
     lidar_type: 3                # Ouster LiDAR
     scan_line: 128
     blind: 4
     feature_extract_en: false
     point_filter_num: 5
-    # mean_acc_norm: 9.805     #mid70
-    mean_acc_norm: 1.0     #mid360
 
 initialization:
     cut_frame: true
-    cut_frame_num: 1 # must be positive integer
+    cut_frame_num: 2 # must be positive integer
     cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805

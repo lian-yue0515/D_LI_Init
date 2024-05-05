@@ -1245,8 +1245,8 @@ int main(int argc, char **argv)
     nh.param<bool>("pcd_save/pcd_save_en", pcd_save_en, false);
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<double>("mapping/cov_lidar", cov_lidar, 0.001);
-    nh.param<double>("preprocess/mean_acc_norm", p_imu->IMU_mean_acc_norm, 1.0);
-    nh.param<double>("preprocess/mean_acc_norm", dynamic_init->mean_acc_norm, 1.0);
+    nh.param<double>("initialization/mean_acc_norm", p_imu->IMU_mean_acc_norm, 1.0);
+    nh.param<double>("initialization/mean_acc_norm", dynamic_init->mean_acc_norm, 1.0);
     
     cout << "lidar_type: " << lidar_type << endl;
     cout << "LiDAR-only odometry starts." << endl;
@@ -1819,7 +1819,7 @@ int main(int argc, char **argv)
               " total distort iter = " << distort_time <<
             log_id++;
 
-            cout<<" after up: "<<" pos : "<< state.pos_end.transpose() << " vel : " << state.vel_end.transpose()<< endl << endl;
+            // cout<<" after up: "<<" pos : "<< state.pos_end.transpose() << " vel : " << state.vel_end.transpose()<< endl << endl;
             frame_num++;
             V3D ext_euler = RotMtoEuler(state.offset_R_L_I);
             // fout_out << euler_cur.transpose() * 57.3 << " " 

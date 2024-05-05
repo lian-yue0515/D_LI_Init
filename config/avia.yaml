@@ -7,8 +7,6 @@ preprocess:
     scan_line: 6
     blind: 2
     point_filter_num: 2
-    mean_acc_norm: 9.805     #mid70
-    # mean_acc_norm: 1.0     #mid360
 
 initialization:
     cut_frame: false

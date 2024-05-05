@@ -455,7 +455,7 @@ void ImuProcess::Reforward_propagation_without_imu(StatesGroup& last_state, Stat
 
 void ImuProcess::propagation_and_undist(const MeasureGroup &meas, StatesGroup &state_inout, PointCloudXYZI &pcl_out)
 {
-  cout<<" process fir: "<<" pos : "<< state_inout.pos_end.transpose() << " vel : " << state_inout.vel_end.transpose()<< endl;
+  // cout<<" process fir: "<<" pos : "<< state_inout.pos_end.transpose() << " vel : " << state_inout.vel_end.transpose()<< endl;
   /*** add the imu of the last frame-tail to the current frame-head ***/
   pcl_out = *(meas.lidar);
   auto v_imu = meas.imu;
@@ -601,7 +601,7 @@ void ImuProcess::propagation_and_undist(const MeasureGroup &meas, StatesGroup &s
         }
     }
   }
-  cout<<" process up: "<<" pos : "<< state_inout.pos_end.transpose() << " vel : " << state_inout.vel_end.transpose()<< endl;
+  // cout<<" process up: "<<" pos : "<< state_inout.pos_end.transpose() << " vel : " << state_inout.vel_end.transpose()<< endl;
 }
 
 
