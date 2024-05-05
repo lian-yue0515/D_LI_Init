@@ -7,6 +7,8 @@ preprocess:
     blind: 3
     feature_extract_en: false
     point_filter_num: 2
+    # mean_acc_norm: 9.805     #mid70
+    mean_acc_norm: 1.0     #mid360
 
 initialization:
     cut_frame_num: 4 # must be positive integer

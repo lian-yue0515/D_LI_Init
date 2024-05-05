@@ -1245,7 +1245,9 @@ int main(int argc, char **argv)
     nh.param<bool>("pcd_save/pcd_save_en", pcd_save_en, false);
     nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
     nh.param<double>("mapping/cov_lidar", cov_lidar, 0.001);
-
+    nh.param<double>("preprocess/mean_acc_norm", p_imu->IMU_mean_acc_norm, 1.0);
+    nh.param<double>("preprocess/mean_acc_norm", dynamic_init->mean_acc_norm, 1.0);
+    
     cout << "lidar_type: " << lidar_type << endl;
     cout << "LiDAR-only odometry starts." << endl;
 
@@ -1277,7 +1279,6 @@ int main(int argc, char **argv)
     p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
     p_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
     p_imu->set_acc_bias_cov(V3D(b_acc_cov, b_acc_cov, b_acc_cov));
-    p_imu->set_mean_acc_norm(1);
     G.setZero();
     H_T_H.setZero();
     I_STATE.setIdentity();
