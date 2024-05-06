@@ -92,7 +92,7 @@ Visualization Manager:
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
-        - Alpha: 0.5
+        - Alpha: 0.10000000149011612
           Autocompute Intensity Bounds: true
           Autocompute Value Bounds:
             Max Value: 7
@@ -350,15 +350,15 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/ThirdPersonFollower
-      Distance: 28.75823211669922
+      Distance: 34.040897369384766
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -4.400053977966309
-        Y: -0.5074193477630615
+        X: -5.311679840087891
+        Y: 3.570261001586914
         Z: 3.5762786865234375e-6
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
@@ -368,7 +368,7 @@ Visualization Manager:
       Pitch: 1.5697963237762451
       Target Frame: camera_init
       Value: ThirdPersonFollower (rviz)
-      Yaw: 3.5363762378692627
+      Yaw: 3.446376085281372
     Saved: ~
 Window Geometry:
   Displays:
@@ -387,4 +387,4 @@ Window Geometry:
     collapsed: true
   Width: 912
   X: 973
-  Y: 67
+  Y: 37

@@ -366,9 +366,9 @@ void lasermap_fov_segment()
     }
     LocalMap_Points = New_LocalMap_Points;
     points_cache_collect();
-
-    if(cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
-
+    if(!imu_en){
+        if(cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
+    }
 }
 
 double timediff_imu_wrt_lidar = 0.0;
@@ -867,9 +867,9 @@ int process_increments = 0;
 void map_incremental_imu() {
     PointVector PointToAdd;
     PointVector PointNoNeedDownsample;
-    PointToAdd.reserve(feats_down_size);
-    PointNoNeedDownsample.reserve(feats_down_size);
-    for (int i = 0; i < feats_down_size; i++) {
+    PointToAdd.reserve(feats_points_size);
+    PointNoNeedDownsample.reserve(feats_points_size);
+    for (int i = 0; i < feats_points_size; i++) {
         /* transform to world frame */
         pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
         /* decide if need add to map */
@@ -1231,6 +1231,7 @@ int main(int argc, char **argv)
     nh.param<double>("mapping/gyr_cov", gyr_cov, 0.1);
     nh.param<double>("mapping/acc_cov", acc_cov, 0.1);
     nh.param<double>("mapping/b_gyr_cov", b_gyr_cov, 0.0001);
+    nh.param<double>("mapping/b_acc_cov", b_acc_cov, 0.0001);
     nh.param<double>("preprocess/blind", p_pre->blind, 1.0);
     nh.param<int>("preprocess/lidar_type", lidar_type, AVIA);
     nh.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
