@@ -107,7 +107,7 @@ void Preprocess::process_cut_frame_livox(const livox_ros_driver::CustomMsg::Cons
         }
     }
     sort(pl_surf.points.begin(), pl_surf.points.end(), time_list_cut_frame);
-    //end time of last frame，单位ms
+    //end time of last frame，ms
     double last_frame_end_time = msg->header.stamp.toSec() * 1000;
     uint valid_num = 0;
     uint cut_num = 0;
@@ -197,14 +197,14 @@ void Preprocess::process_cut_frame_livox(const livox_ros_driver::CustomMsg::Cons
     sort(pl_surf.points.begin(), pl_surf.points.end(), time_list_cut_frame);
     sort(pt_surf.begin(), pt_surf.end(), time_list_cut_frame3D);
 
-    //end time of last frame，单位ms
+    //end time of last frame，ms
     double last_frame_end_time = msg->header.stamp.toSec() * 1000;
     uint valid_num = 0;
     uint cut_num = 0;
     uint valid_pcl_size = pl_surf.points.size();
 
     int required_cut_num = required_frame_num;
-    /// 前cut_frame_init_num帧不进行分帧
+    /// cut_frame_init_num
     if (scan_count <= cut_frame_init_num)
         required_cut_num = 1;
 
@@ -833,8 +833,7 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
     pl_surf.reserve(plsize);
     pl_full.resize(plsize);
 
-    /// TODO 这里先直接pushback吧 后续可以改一下 先分配个内存
-
+    /// TODO 
     for (int i = 0; i < N_SCANS; i++)
     {
         pl_buff[i].clear();
@@ -846,7 +845,7 @@ void Preprocess::avia_handler(const livox_ros_driver::CustomMsg::ConstPtr &msg)
     if (scan_count <= cut_frame_init_num)
         real_point_filter_num = 1;
 
-    /// TODO 提取特征的部分后续再改 默认不提特征
+    /// TODO 
     if (feature_enabled)
     {
         for (uint i = 1; i < plsize; i++) {

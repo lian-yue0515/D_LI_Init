@@ -1,6 +1,6 @@
 common:
     lid_topic:  "/hesai/pandar"
-    imu_topic:  "/mavros/imu/data_raw"
+    imu_topic:  "/alphasense/imu"
 preprocess:
     lidar_type: 5                # Hesai PandarXT
     scan_line: 32
@@ -9,19 +9,16 @@ preprocess:
     point_filter_num: 2
 
 initialization:
-    cut_frame_num: 4 # must be positive integer
-    orig_odom_freq: 10
+    cut_frame: true
+    cut_frame_num: 2 # must be positive integer
     cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805
     online_refine_time: 15
-    data_accum_length: 300
+    data_accum_length: 800
     Rot_LI_cov: [ 0.00005, 0.00005, 0.00005 ]
     Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
-    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
-                   0, 0, 1]
+
 mapping:
     filter_size_surf: 0.05
     filter_size_map: 0.15
@@ -38,6 +35,10 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
+    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output

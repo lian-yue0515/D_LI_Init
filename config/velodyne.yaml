@@ -1,6 +1,6 @@
 common:
-    lid_topic:  "/velodyne_points_0"
-    imu_topic:  "/mavros/imu/data_raw"
+    lid_topic:  "/velodyne_points"
+    imu_topic:  "/imu/data"
 preprocess:
     lidar_type: 2                # Velodyne LiDAR
     scan_line: 32

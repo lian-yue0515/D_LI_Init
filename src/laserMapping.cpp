@@ -1409,12 +1409,12 @@ int main(int argc, char **argv)
             /// 未下采样的Point3D点
             feats_points_full = Measures.points;
 
-            if(frame_id < dynamic_init->data_accum_length){
-                pcl::PointCloud<PointType>::Ptr cloudyuanshi(new pcl::PointCloud<PointType>());
-                *cloudyuanshi = *Measures.lidar;
-                std::string filenameyuanshi = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/yuanshi/yuanshi"+ std::to_string(frame_id)+ ".pcd";
-                pcl::io::savePCDFile(filenameyuanshi, *(cloudyuanshi));
-            }
+            // if(frame_id < dynamic_init->data_accum_length){
+            //     pcl::PointCloud<PointType>::Ptr cloudyuanshi(new pcl::PointCloud<PointType>());
+            //     *cloudyuanshi = *Measures.lidar;
+            //     std::string filenameyuanshi = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/yuanshi/yuanshi"+ std::to_string(frame_id)+ ".pcd";
+            //     pcl::io::savePCDFile(filenameyuanshi, *(cloudyuanshi));
+            // }
 
             p_imu->Process(Measures, state, feats_undistort, dynamic_init->get_acc_bias(), dynamic_init->get_gyro_bias());
 
@@ -1425,12 +1425,12 @@ int main(int argc, char **argv)
                 ROS_WARN("First frame, no points stored.");
                 continue;
             }
-            if(frame_id < dynamic_init->data_accum_length){
-                pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
-                *cloudshowqujibian = (*feats_undistort);
-                std::string filenamequjibian = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibian/qujibian"+ std::to_string(frame_id)+ ".pcd";
-                pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
-            }
+            // if(frame_id < dynamic_init->data_accum_length){
+            //     pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
+            //     *cloudshowqujibian = (*feats_undistort);
+            //     std::string filenamequjibian = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibian/qujibian"+ std::to_string(frame_id)+ ".pcd";
+            //     pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
+            // }
 
             feats_points = PCLtoPoint3D(feats_undistort, RAW);
             current_dt = p_imu->frame_dt;
@@ -1768,18 +1768,18 @@ int main(int argc, char **argv)
             }
 
             std::chrono::steady_clock::time_point icp_end = std::chrono::steady_clock::now();
-            if(!imu_en){
-                *feats_down_body = point3DtoPCL(feats_points, UNDISTORT);
-                last_state = state;
-                if(frame_id < dynamic_init->data_accum_length){
-                    pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-                    *cloudshow = *feats_down_body;
-                    cloudshow->height = 1;
-                    cloudshow->width = feats_down_body->size();
-                    std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
-                    pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
-                }
-            }
+            // if(!imu_en){
+            //     *feats_down_body = point3DtoPCL(feats_points, UNDISTORT);
+            //     last_state = state;
+            //     if(frame_id < dynamic_init->data_accum_length){
+            //         pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+            //         *cloudshow = *feats_down_body;
+            //         cloudshow->height = 1;
+            //         cloudshow->width = feats_down_body->size();
+            //         std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
+            //         pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
+            //     }
+            // }
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
 

@@ -1,8 +1,8 @@
 common:
-    # lid_topic:  "/os_cloud_node/points"
-    # imu_topic:  "/os_cloud_node/imu"
-    lid_topic:  "/os1_cloud_node1/points"
-    imu_topic:  "/os1_cloud_node1/imu"
+    lid_topic:  "/os_cloud_node/points"
+    imu_topic:  "/os_cloud_node/imu"
+    # lid_topic:  "/os1_cloud_node1/points"
+    # imu_topic:  "/os1_cloud_node1/imu"
 preprocess:
     lidar_type: 3                # Ouster LiDAR
     scan_line: 128
