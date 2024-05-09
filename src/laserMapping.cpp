@@ -1835,8 +1835,8 @@ int main(int argc, char **argv)
                 if(!Iteration_begin){
                     dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
                 }else{
-                    dynamic_init->system_state[measures_num].R = state.rot_end;
-                    dynamic_init->system_state[measures_num].T = state.pos_end;
+                    dynamic_init->system_state[measures_num].R = Lidar_R_wrt_IMU.transpose() * state.rot_end;
+                    dynamic_init->system_state[measures_num].T = state.pos_end - Lidar_T_wrt_IMU;
                 }
             }
             if(!LGO_MODE && measures_num == dynamic_init->data_accum_length - 1 && !dynamic_init->dynamic_init_fished){

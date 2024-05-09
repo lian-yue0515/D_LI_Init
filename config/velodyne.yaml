@@ -1,15 +1,17 @@
 common:
-    lid_topic:  "/velodyne_points"
-    imu_topic:  "/imu/data"
+    # lid_topic:  "/velodyne_points"
+    # imu_topic:  "/imu/data"
+    lid_topic:  "/tartanair/velodyne"
+    imu_topic:  "/tartanair/imu"
 preprocess:
     lidar_type: 2                # Velodyne LiDAR
     scan_line: 32
-    blind: 2
+    blind: 0.2
     feature_extract_en: false
     point_filter_num: 2
 
 initialization:
-    cut_frame: false
+    cut_frame: true
     cut_frame_num: 2 # must be positive integer
     cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10

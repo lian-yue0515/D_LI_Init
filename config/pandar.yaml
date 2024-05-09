@@ -4,14 +4,14 @@ common:
 preprocess:
     lidar_type: 5                # Hesai PandarXT
     scan_line: 32
-    blind: 3
+    blind: 0.1
     feature_extract_en: false
     point_filter_num: 2
 
 initialization:
     cut_frame: true
-    cut_frame_num: 2 # must be positive integer
-    cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
+    cut_frame_num: 1 # must be positive integer
+    cut_frame_init_num: 10       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805
     online_refine_time: 15
@@ -20,8 +20,8 @@ initialization:
     Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
 
 mapping:
-    filter_size_surf: 0.05
-    filter_size_map: 0.15
+    filter_size_surf: 0.1
+    filter_size_map: 0.2
     gyr_cov: 0.0001             # lgo角速度噪声协方差
     acc_cov: 1             # lgo线速度噪声协方差
     # gyr_cov: 20             # lo角速度噪声协方差
@@ -35,10 +35,10 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
-                   0, 0, 1]
+    extrinsic_T: [ -0.006730146149038548, -0.006897049862999071, 0.049898628062256645 ]
+    extrinsic_R: [ 0.006609639848469365, -0.9999773650294649, 0.0012578115132016717,
+                    -0.9999762249571927, -0.006612093869054189, -0.0019569708811106104,
+                    0.001965243352927244, -0.0012448467359610184, -0.9999972940839232]
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
