@@ -3,4 +3,5 @@ pcb
 qujibian-d(qingyi)
 qujibian-g+d(qingyi)
 *.pcb
+*.py
 

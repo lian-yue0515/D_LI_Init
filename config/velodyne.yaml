@@ -11,7 +11,7 @@ preprocess:
     point_filter_num: 2
 
 initialization:
-    cut_frame: true
+    cut_frame: false
     cut_frame_num: 2 # must be positive integer
     cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
@@ -27,8 +27,8 @@ mapping:
     acc_cov: 1             # lgo线速度噪声协方差
     # gyr_cov: 0.01             # lo角速度噪声协方差
     # acc_cov: 0.01             # lo线速度噪声协方差
-    # gyr_cov: 0.1             # lio角速度噪声协方差
-    # acc_cov: 0.1             # lio线速度噪声协方差
+    # gyr_cov: 0.01             # lio角速度噪声协方差
+    # acc_cov: 0.01             # lio线速度噪声协方差
     det_range: 100.0
     cov_lidar: 0.001
     max_iteration: 20
@@ -36,10 +36,15 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
-                   0, 0, 1]
+    # extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    # extrinsic_R: [ 1, 0, 0,
+    #                0, 1, 0,
+    #                0, 0, 1]
+    #iccv2023
+    extrinsic_T: [ 0, 0, -0 ]
+    extrinsic_R: [ 0, 1, 0,
+                   1, 0, 0,
+                   0, 0, -1]
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
