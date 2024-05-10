@@ -1,8 +1,8 @@
 common:
-    # lid_topic:  "/velodyne_points"
-    # imu_topic:  "/imu/data"
-    lid_topic:  "/tartanair/velodyne"
-    imu_topic:  "/tartanair/imu"
+    lid_topic:  "/velodyne_points"
+    imu_topic:  "/imu/data"
+    # lid_topic:  "/tartanair/velodyne"
+    # imu_topic:  "/tartanair/imu"
 preprocess:
     lidar_type: 2                # Velodyne LiDAR
     scan_line: 32
@@ -21,8 +21,8 @@ initialization:
     Rot_LI_cov: [ 0.00005, 0.00005, 0.00005 ]
     Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
 mapping:
-    filter_size_surf: 0.5
-    filter_size_map: 0.5
+    filter_size_surf: 0.15
+    filter_size_map: 0.25
     gyr_cov: 0.0001             # lgo角速度噪声协方差
     acc_cov: 1             # lgo线速度噪声协方差
     # gyr_cov: 0.01             # lo角速度噪声协方差
@@ -36,15 +36,17 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    # extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
-    # extrinsic_R: [ 1, 0, 0,
-    #                0, 1, 0,
-    #                0, 0, 1]
-    #iccv2023
-    extrinsic_T: [ 0, 0, -0 ]
-    extrinsic_R: [ 0, 1, 0,
-                   1, 0, 0,
-                   0, 0, -1]
+    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    extrinsic_R: [ 1, 0, 0,
+                   0, 1, 0,
+                   0, 0, 1]
+    #iccv2023: /tartanair/velodyne
+    # extrinsic_T: [ 0, 0, -0 ]
+    # extrinsic_R: [ 0, 1, 0,
+    #                1, 0, 0,
+    #                0, 0, -1]
+    # Ground_challange:/velodyne_points
+
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output

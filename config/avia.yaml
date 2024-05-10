@@ -35,7 +35,8 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    # aviv
+    extrinsic_T: [ 0.04165, 0.02326, -0.0284 ]
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1]

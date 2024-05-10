@@ -37,10 +37,21 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    # MCD:/os_cloud_node/points 
+    # extrinsic_T: [ 0.006, -0.0119, -0.0076 ]
+    # extrinsic_R: [ 1, 0, 0,
+    #                0, 1, 0,
+    #                0, 0, 1]
+    # NTU_VIRAL:/os1_cloud_node1/points 
+    extrinsic_T: [ -0.050, 0, 0.055 ]
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1]
+    # Newer_collwge:/os_cloud_node/points
+    # extrinsic_T: [0.014, -0.012, -0.015] 
+    # extrinsic_R: [ 1, 0, 0,
+    #                0, 1, 0,
+    #                0, 0, 1]
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
