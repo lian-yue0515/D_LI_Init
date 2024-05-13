@@ -1,6 +1,7 @@
 common:
     lid_topic:  "/velodyne_points"
-    imu_topic:  "/imu/data"
+    # imu_topic:  "/imu/data"
+    imu_topic:  "/imu_raw"
     # lid_topic:  "/tartanair/velodyne"
     # imu_topic:  "/tartanair/imu"
 preprocess:
@@ -13,7 +14,7 @@ preprocess:
 initialization:
     cut_frame: false
     cut_frame_num: 2 # must be positive integer
-    cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
+    cut_frame_init_num: 10       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805
     online_refine_time: 15
@@ -21,10 +22,12 @@ initialization:
     Rot_LI_cov: [ 0.00005, 0.00005, 0.00005 ]
     Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
 mapping:
-    filter_size_surf: 0.15
-    filter_size_map: 0.25
-    gyr_cov: 0.0001             # lgo角速度噪声协方差
-    acc_cov: 1             # lgo线速度噪声协方差
+    filter_size_surf: 0.5
+    filter_size_map: 0.5
+    # gyr_cov: 0.0001             # lgo角速度噪声协方差
+    # acc_cov: 5             # lgo线速度噪声协方差
+    gyr_cov: 0.0001           
+    acc_cov: 5
     # gyr_cov: 0.01             # lo角速度噪声协方差
     # acc_cov: 0.01             # lo线速度噪声协方差
     # gyr_cov: 0.01             # lio角速度噪声协方差
@@ -36,16 +39,22 @@ mapping:
     cube_side_length: 2000
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
-    extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
-    extrinsic_R: [ 1, 0, 0,
-                   0, 1, 0,
-                   0, 0, 1]
+    # extrinsic_T: [ 0.05512, 0.02226, -0.0297 ]
+    # extrinsic_R: [ 1, 0, 0,
+    #                0, 1, 0,
+    #                0, 0, 1]
     #iccv2023: /tartanair/velodyne
     # extrinsic_T: [ 0, 0, -0 ]
     # extrinsic_R: [ 0, 1, 0,
     #                1, 0, 0,
     #                0, 0, -1]
     # Ground_challange:/velodyne_points
+
+    # ours dataset
+    extrinsic_T: [ -0.017189, 0.015727, 0.106037]
+    extrinsic_R: [ -0.999887, -0.011619, -0.009487, 
+                   0.011486, -0.999838, 0.013885, 
+                   -0.009647, 0.013775, 0.99859]
 
 publish:
     path_en:  true

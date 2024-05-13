@@ -10,7 +10,7 @@ preprocess:
 
 initialization:
     cut_frame: true
-    cut_frame_num: 1 # must be positive integer
+    cut_frame_num: 2 # must be positive integer
     cut_frame_init_num: 10       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805

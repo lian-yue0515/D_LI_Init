@@ -1400,6 +1400,7 @@ int main(int argc, char **argv)
         }        
         if(data_alignment) 
         {
+            lidar_end_time = Measures.lidar_end_time;
             frame_id++;
             data_alignment = 0;
             std::chrono::steady_clock::time_point t_imu_process_begin = std::chrono::steady_clock::now();
@@ -1412,6 +1413,8 @@ int main(int argc, char **argv)
             // if(frame_id < dynamic_init->data_accum_length){
             //     pcl::PointCloud<PointType>::Ptr cloudyuanshi(new pcl::PointCloud<PointType>());
             //     *cloudyuanshi = *Measures.lidar;
+            //     cloudyuanshi->height = 1;
+            //     cloudyuanshi->width = Measures.lidar->size();
             //     std::string filenameyuanshi = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/yuanshi/yuanshi"+ std::to_string(frame_id)+ ".pcd";
             //     pcl::io::savePCDFile(filenameyuanshi, *(cloudyuanshi));
             // }
@@ -1428,6 +1431,8 @@ int main(int argc, char **argv)
             // if(frame_id < dynamic_init->data_accum_length){
             //     pcl::PointCloud<PointType>::Ptr cloudshowqujibian(new pcl::PointCloud<PointType>());
             //     *cloudshowqujibian = (*feats_undistort);
+            //     cloudshowqujibian->height = 1;
+            //     cloudshowqujibian->width = feats_undistort->size();
             //     std::string filenamequjibian = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibian/qujibian"+ std::to_string(frame_id)+ ".pcd";
             //     pcl::io::savePCDFile(filenamequjibian, *(cloudshowqujibian));
             // }
@@ -1835,8 +1840,10 @@ int main(int argc, char **argv)
                 if(!Iteration_begin){
                     dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
                 }else{
+                    // dynamic_init->system_state[measures_num].R = Lidar_R_wrt_IMU.transpose() * state.rot_end;
                     dynamic_init->system_state[measures_num].R = state.rot_end * Lidar_R_wrt_IMU;
                     dynamic_init->system_state[measures_num].T = state.rot_end * Lidar_T_wrt_IMU + state.pos_end;
+                    // dynamic_init->system_state[measures_num].T = state.pos_end - Lidar_T_wrt_IMU;
                 }
             }
             if(!LGO_MODE && measures_num == dynamic_init->data_accum_length - 1 && !dynamic_init->dynamic_init_fished){
@@ -1857,8 +1864,8 @@ int main(int argc, char **argv)
                         state.rot_end = Eye3d;
 
                         state.bias_g = dynamic_init->get_gyro_bias();
-                        state.gravity = -(Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
-                        state.vel_end = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+                        state.gravity = -(Lidar_R_wrt_IMU.transpose() * dynamic_init->get_Grav_L0());
+                        state.vel_end = Lidar_R_wrt_IMU.transpose() * dynamic_init->get_V_0();
 
                         state.cov(6, 6) = state.cov(7, 7) = state.cov(8, 8) = 0.00001;  //offset_R_L_I
                         state.cov(9, 9) = state.cov(10, 10) = state.cov(11, 11) = 0.00001;   //offset_T_L_I
@@ -1872,6 +1879,8 @@ int main(int argc, char **argv)
                         p_imu->Reset();
                         p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
                         p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
+                        // p_imu->set_gyr_cov(V3D(0.0001, 0.0001, 0.0001));
+                        // p_imu->set_acc_cov(V3D(5, 5, 5));
                         p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                         p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                         p_imu->imu_need_init_ = true;
@@ -1895,8 +1904,8 @@ int main(int argc, char **argv)
                     state.rot_end = Eye3d;
 
                     state.bias_g = dynamic_init->get_gyro_bias();
-                    state.gravity = -(Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
-                    state.vel_end = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+                    state.gravity = -(Lidar_R_wrt_IMU.transpose() * dynamic_init->get_Grav_L0());
+                    state.vel_end = Lidar_R_wrt_IMU.transpose() * dynamic_init->get_V_0();
 
                     state.cov(6, 6) = state.cov(7, 7) = state.cov(8, 8) = 0.00001;  //offset_R_L_I
                     state.cov(9, 9) = state.cov(10, 10) = state.cov(11, 11) = 0.00001;   //offset_T_L_I
@@ -1908,6 +1917,8 @@ int main(int argc, char **argv)
                     p_imu->Reset();
                     p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
                     p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
+                    // p_imu->set_gyr_cov(V3D(0.0001, 0.0001, 0.0001));
+                    // p_imu->set_acc_cov(V3D(5, 5, 5));
                     p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                     p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                     p_imu->imu_need_init_ = true;
