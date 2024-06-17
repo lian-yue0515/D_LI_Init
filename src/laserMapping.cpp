@@ -158,6 +158,10 @@ PointCloudXYZI::Ptr feats_down_world(new PointCloudXYZI());
 PointCloudXYZI::Ptr normvec(new PointCloudXYZI(100000, 1));
 PointCloudXYZI::Ptr laserCloudOri(new PointCloudXYZI(100000, 1));
 PointCloudXYZI::Ptr corr_normvect(new PointCloudXYZI(100000, 1));
+
+PointCloudXYZI::Ptr feats_map(new PointCloudXYZI());
+PointCloudXYZI::Ptr feats_map_down(new PointCloudXYZI());
+PointCloudXYZI::Ptr feats_map_down_fir(new PointCloudXYZI());
 PointCloudXYZI::Ptr _featsArray;
 
 /// 全局变量 当前帧的点云Point3D表示
@@ -169,6 +173,8 @@ double current_end_time = 0.1;
 
 pcl::VoxelGrid<PointType> downSizeFilterSurf;
 pcl::VoxelGrid<PointType> downSizeFilterMap;
+pcl::VoxelGrid<PointType> downSizeMap;
+pcl::VoxelGrid<PointType> downSizeMap_fir;
 
 KD_TREE ikdtree;
 
@@ -964,7 +970,6 @@ void map_incremental()
 void publish_frame_world(const ros::Publisher &pubLaserCloudFullRes) {
     if (scan_pub_en)
     {
-
         PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_down_body : feats_down_body);
         int size = laserCloudFullRes->points.size();
 
@@ -979,7 +984,7 @@ void publish_frame_world(const ros::Publisher &pubLaserCloudFullRes) {
                 pointBodyToWorld(&laserCloudFullRes->points[i], \
                                 &laserCloudWorld->points[i]);
         }
-
+        *feats_map += *laserCloudWorld;
         sensor_msgs::PointCloud2 laserCloudmsg;
         if (lidar_type == L515)
             pcl::toROSMsg(*laserCloudWorldRGB, laserCloudmsg);
@@ -1271,6 +1276,8 @@ int main(int argc, char **argv)
     memset(res_last, -1000.0f, sizeof(res_last));
     downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min, filter_size_surf_min);
     downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
+    downSizeMap.setLeafSize(0.1, 0.1, 0.1);
+    downSizeMap_fir.setLeafSize(0.1, 0.1, 0.1);
     memset(point_selected_surf, true, sizeof(point_selected_surf));
     memset(res_last, -1000.0f, sizeof(res_last));
 
@@ -1811,6 +1818,18 @@ int main(int argc, char **argv)
             if (path_en) publish_path(pubPath);
 
             std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
+            // if(frame_num < 100 && imu_en){
+            //     downSizeMap_fir.setInputCloud(feats_map);
+            //     downSizeMap_fir.filter(*feats_map_down_fir);
+            //     std::string filenamequjibian = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/map/map_fir"+ std::to_string(frame_num)+ ".pcd";
+            //     pcl::io::savePCDFile(filenamequjibian, *(feats_map_down_fir));
+            // }
+            // if(frame_id > 400){
+            //     downSizeMap.setInputCloud(feats_map);
+            //     downSizeMap.filter(*feats_map_down);
+            //     std::string filenamequjibian = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/map/map"+ std::to_string(0)+ ".pcd";
+            //     pcl::io::savePCDFile(filenamequjibian, *(feats_map_down));
+            // }
 
             static int log_id = 0;
             f << "ID = " << log_id <<
@@ -1879,7 +1898,7 @@ int main(int argc, char **argv)
                         p_imu->Reset();
                         p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
                         p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
-                        // p_imu->set_gyr_cov(V3D(0.0001, 0.0001, 0.0001));
+                        // p_imu->set_gyr_cov(V3D(0.01, 0.01, 0.01));
                         // p_imu->set_acc_cov(V3D(5, 5, 5));
                         p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                         p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));
@@ -1917,7 +1936,7 @@ int main(int argc, char **argv)
                     p_imu->Reset();
                     p_imu->set_gyr_cov(V3D(0.1, 0.1, 0.1));
                     p_imu->set_acc_cov(V3D(0.1, 0.1, 0.1));
-                    // p_imu->set_gyr_cov(V3D(0.0001, 0.0001, 0.0001));
+                    // p_imu->set_gyr_cov(V3D(0.01, 0.01, 0.01));
                     // p_imu->set_acc_cov(V3D(5, 5, 5));
                     p_imu->set_gyr_bias_cov(V3D(0.0001, 0.0001, 0.0001));
                     p_imu->set_acc_bias_cov(V3D(0.0001, 0.0001, 0.0001));

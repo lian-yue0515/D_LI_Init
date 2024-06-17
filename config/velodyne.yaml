@@ -1,9 +1,14 @@
 common:
-    lid_topic:  "/velodyne_points"
+    # lid_topic:  "/velodyne_points"
+    # imu_topic:  "/imu"
     # imu_topic:  "/imu/data"
     imu_topic:  "/imu_raw"
     # lid_topic:  "/tartanair/velodyne"
     # imu_topic:  "/tartanair/imu"
+    lid_topic:  "/velodyne_points"
+    # imu_topic:  "/handsfree/imu"
+    # imu_topic:  "/camera/imu"
+
 preprocess:
     lidar_type: 2                # Velodyne LiDAR
     scan_line: 32
@@ -12,9 +17,9 @@ preprocess:
     point_filter_num: 2
 
 initialization:
-    cut_frame: false
+    cut_frame: true
     cut_frame_num: 2 # must be positive integer
-    cut_frame_init_num: 10       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
+    cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805
     online_refine_time: 15
@@ -24,14 +29,16 @@ initialization:
 mapping:
     filter_size_surf: 0.5
     filter_size_map: 0.5
-    # gyr_cov: 0.0001             # lgo角速度噪声协方差
+    # gyr_cov: 0.001             # lgo角速度噪声协方差
     # acc_cov: 5             # lgo线速度噪声协方差
-    gyr_cov: 0.0001           
-    acc_cov: 5
+    # gyr_cov: 0.0001   #ours imu          
+    # acc_cov: 5
+    gyr_cov: 5   #ours imu          
+    acc_cov: 20
     # gyr_cov: 0.01             # lo角速度噪声协方差
     # acc_cov: 0.01             # lo线速度噪声协方差
-    # gyr_cov: 0.01             # lio角速度噪声协方差
-    # acc_cov: 0.01             # lio线速度噪声协方差
+    # gyr_cov: 0.1             # lio角速度噪声协方差
+    # acc_cov: 0.1             # lio线速度噪声协方差
     det_range: 100.0
     cov_lidar: 0.001
     max_iteration: 20
@@ -49,13 +56,27 @@ mapping:
     #                1, 0, 0,
     #                0, 0, -1]
     # Ground_challange:/velodyne_points
-
-    # ours dataset
+    # extrinsic_T: [ 0, 0, 0.5 ]
+    # extrinsic_R: [ 1, 0, 0,
+    #                0, 1, 0,
+                #    0, 0, 1]
+    # # ours dataset
     extrinsic_T: [ -0.017189, 0.015727, 0.106037]
     extrinsic_R: [ -0.999887, -0.011619, -0.009487, 
                    0.011486, -0.999838, 0.013885, 
                    -0.009647, 0.013775, 0.99859]
+    
+    # M2DGR-PLUS
+    # extrinsic_T: [ -0.03, 0, 1.03]
+    # extrinsic_R: [ 0, -1, 0, 
+    #                0, 0, -1, 
+    #                1, 0, 0]
 
+    # M2DGR
+    # extrinsic_T: [ -0.13, 0, -1.03]
+    # extrinsic_R: [ 1, 0, 0, 
+    #                0, 1, 0, 
+    #                0, 0, 1]
 publish:
     path_en:  true
     scan_publish_en:  true       # false: close all the point cloud output
