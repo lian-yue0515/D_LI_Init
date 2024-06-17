@@ -1780,21 +1780,20 @@ int main(int argc, char **argv)
             }
 
             std::chrono::steady_clock::time_point icp_end = std::chrono::steady_clock::now();
-            // if(!imu_en){
-            //     *feats_down_body = point3DtoPCL(feats_points, UNDISTORT);
-            //     last_state = state;
-            //     if(frame_id < dynamic_init->data_accum_length){
-            //         pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
-            //         *cloudshow = *feats_down_body;
-            //         cloudshow->height = 1;
-            //         cloudshow->width = feats_down_body->size();
-            //         std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
-            //         pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
-            //     }
-            // }
+            if(!imu_en){
+                *feats_down_body = point3DtoPCL(feats_points, UNDISTORT);
+                last_state = state;
+                // if(frame_id < dynamic_init->data_accum_length){
+                //     pcl::PointCloud<PointType>::Ptr cloudshow(new pcl::PointCloud<PointType>());
+                //     *cloudshow = *feats_down_body;
+                //     cloudshow->height = 1;
+                //     cloudshow->width = feats_down_body->size();
+                //     std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
+                //     pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
+                // }
+            }
             /******* Publish odometry *******/
             publish_odometry(pubOdomAftMapped);
-
             std::chrono::steady_clock::time_point map_increment_begin = std::chrono::steady_clock::now();
 
             /*** add the feature points to map kdtree ***/
