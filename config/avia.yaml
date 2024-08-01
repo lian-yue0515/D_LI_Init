@@ -11,6 +11,8 @@ preprocess:
     mean_acc_norm: 1.0     #mid360
 
 mapping:
+    filter_size_surf: 0.05
+    filter_size_map: 0.15
     acc_cov: 0.1
     gyr_cov: 0.1
     b_acc_cov: 0.0001

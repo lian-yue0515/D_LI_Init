@@ -965,9 +965,15 @@ int main(int argc, char** argv)
                         state_init.pos = Zero3d;
                         state_init.rot = Eye3d;
                     }
-                    state_init.bg = dynamic_init->get_gyro_bias();
-                    state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
-                    state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+                    // state_init.bg = dynamic_init->get_gyro_bias();
+                    // state_init.grav = S2( - Lidar_R_wrt_IMU * dynamic_init->get_Grav_L0());
+                    // state_init.vel = Lidar_R_wrt_IMU * dynamic_init->get_V_0();
+                    V3D G(0.331247,  5.80772,  7.88674);
+                    V3D BG(0.0667854,    -0.038763, -0.000991563);
+                    V3D V(0.476332,  4.58749, 0.877079);
+                    state_init.bg = BG;
+                    state_init.grav = S2( - Lidar_R_wrt_IMU * G);
+                    state_init.vel = V;
                     kf.change_x(state_init);
                     esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf.get_P();
                     init_P.setIdentity();
@@ -1109,7 +1115,7 @@ int main(int argc, char** argv)
                     dynamic_init->LinearAlignment_withoutba(icp_state, x_);
                     current_g = dynamic_init->get_g();
                 }
-                if(abs(Last_g-current_g) < 0.001 || iteration_num == Iteration_NUM)
+                if(abs(Last_g-current_g) < 0.0000001 || iteration_num == Iteration_NUM)
                 {
                     dynamic_init->dynamic_init_fished = true;
                 }else{
