@@ -90,16 +90,16 @@ catkin_package(
   INCLUDE_DIRS
 )
 
-add_executable(li_init
+add_executable(lidar_imu_init
         src/laserMapping.cpp
         include/ikd-Tree/ikd_Tree.cpp
         include/Dynamic_init/Dynamic_init.cpp
         src/preprocess.cpp)
 
-add_dependencies(li_init ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(lidar_imu_init ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-target_link_libraries(li_init ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES} Sophus::Sophus tsl::robin_map)
-target_include_directories(li_init PRIVATE ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(lidar_imu_init ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${PYTHON_LIBRARIES} ${CERES_LIBRARIES} Sophus::Sophus tsl::robin_map)
+target_include_directories(lidar_imu_init PRIVATE ${PYTHON_INCLUDE_DIRS})
 
 
 
