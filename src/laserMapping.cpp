@@ -1301,15 +1301,15 @@ int main(int argc, char **argv)
     /*** debug record ***/
     boost::filesystem::create_directories(root_dir + "/Log");
     boost::filesystem::create_directories(root_dir + "/result");
-    ofstream fout_out;
-    fout_out.open(DEBUG_FILE_DIR("mat_out.txt"), ios::out);
+    ofstream Li_D_init_fastlio;
+    Li_D_init_fastlio.open(DEBUG_FILE_DIR("Li_D_init_fastlio.txt"), ios::out);
     fout_result.open(RESULT_FILE_DIR("Initialization_result.txt"), ios::out);
 
     f.open(root_dir + "/Log/i2lo_log.txt", std::ios::out);
     f.precision(9);
     f.setf(std::ios::fixed);
 
-    if (fout_out)
+    if (Li_D_init_fastlio)
         cout << "~~~~" << ROOT_DIR << " file opened" << endl;
     else
         cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;
@@ -1810,12 +1810,11 @@ int main(int argc, char **argv)
             std::chrono::steady_clock::time_point map_increment_end = std::chrono::steady_clock::now();
 
             /******* Publish points *******/
-            if (scan_pub_en || pcd_save_en) publish_frame_world(pubLaserCloudFullRes);
+            if ((scan_pub_en || pcd_save_en) && dynamic_init->dynamic_init_fished == true) publish_frame_world(pubLaserCloudFullRes);
             last_odom = state.pos_end;
             last_rot = state.rot_end;
             publish_effect_world(pubLaserCloudEffect);
-            if (path_en) publish_path(pubPath);
-
+            if (path_en && dynamic_init->dynamic_init_fished == true) publish_path(pubPath);
             std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
             // if(frame_num < 100 && imu_en){
             //     downSizeMap_fir.setInputCloud(feats_map);
@@ -1843,17 +1842,13 @@ int main(int argc, char **argv)
               " total distort iter = " << distort_time <<
             log_id++;
 
-            // cout<<" after up: "<<" pos : "<< state.pos_end.transpose() << " vel : " << state.vel_end.transpose()<< endl << endl;
             frame_num++;
-            V3D ext_euler = RotMtoEuler(state.offset_R_L_I);
-            // fout_out << euler_cur.transpose() * 57.3 << " " 
-            //         << state.pos_end.transpose() << " "
-            //          << ext_euler.transpose() * 57.3 << " " \
-            //          << state.offset_T_L_I.transpose() << " " 
-            //          << state.vel_end.transpose() << " "  \
-            //          << " " << state.bias_g.transpose() << " " << state.bias_a.transpose() * 0.9822 / 9.81 << " "
-            //          << state.gravity.transpose() << " " << total_distance << endl;
-            fout_out << state.vel_end.transpose() << " " << endl;
+            if (dynamic_init->dynamic_init_fished == true) 
+            {
+                Li_D_init_fastlio << lidar_end_time << " " <<state.vel_end.transpose() << " "  \
+                    << " " << state.bias_g.transpose() << " " \ 
+                    << state.gravity.transpose() << " " << endl;        
+            }
             if(!dynamic_init->dynamic_init_fished){
                 if(!Iteration_begin){
                     dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
@@ -1911,6 +1906,9 @@ int main(int argc, char **argv)
                 if(abs(Last_g-current_g) < Iteration || iteration_num == Iteration_NUM)
                 {
                     dynamic_init->dynamic_init_fished = true;
+                    Li_D_init_fastlio << lidar_end_time << " " <<state.vel_end.transpose() << " "  \
+                    << " " << state.bias_g.transpose() << " " \ 
+                    << state.gravity.transpose() << " " << endl;
                 }else{
                     iteration_num ++;
                     Last_g = dynamic_init->get_g();
