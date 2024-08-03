@@ -113,7 +113,7 @@ bool runtime_pos_log = false, pcd_save_en = false, extrinsic_est_en = true, path
 bool cut_frame = true, data_accum_finished = false, data_accum_start = false, online_calib_finish = false, refine_print = false;
 int cut_frame_num = 1, orig_odom_freq = 10, frame_num = 0;
 double time_lag_IMU_wtr_lidar = 0.0, move_start_time = 0.0, online_calib_starts_time = 0.0, mean_acc_norm = 9.81;
-ofstream fout_result;
+ofstream time_result;
 double cov_lidar = 0.001;
 
 /// 前向传播自适应噪声参数
@@ -188,7 +188,6 @@ V3D Lidar_T_wrt_IMU(Zero3d);
 M3D Lidar_R_wrt_IMU(Eye3d);
 double Last_g;
 double current_g;
-fstream f;
 
 //estimator inputs and output;
 MeasureGroup Measures;
@@ -240,7 +239,7 @@ void calcBodyVar(Eigen::Vector3d &pb, const float range_inc,
 }
 
 void SigHandle(int sig) {
-    f.close();
+    time_result.close();
     p_pre->log_pre.close();
     if (pcd_save_en && pcd_save_interval < 0){
         all_points_dir = string(root_dir + "/PCD/PCD_all" + string(".pcd"));
@@ -1103,32 +1102,18 @@ void publish_mavros(const ros::Publisher &mavros_pose_publisher) {
     mavros_pose_publisher.publish(msg_body_pose);
 }
 
-void publish_path(const ros::Publisher pubPath) {
+void publish_path(const ros::Publisher pubPath, int measures_num) {
     set_posestamp(msg_body_pose.pose);
     msg_body_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
     msg_body_pose.header.frame_id = "camera_init";
-    path.poses.push_back(msg_body_pose);
+    if(!Iteration_begin || dynamic_init->dynamic_init_fished == true){
+        path.poses.push_back(msg_body_pose);
+    }else{
+        path.poses[measures_num-1] = msg_body_pose;
+    }
     pubPath.publish(path);
 }
 
-void fileout_calib_result() {
-    fout_result.setf(ios::fixed);
-    fout_result << setprecision(6)
-                << "Rotation LiDAR to IMU (degree)     = " << RotMtoEuler(state.offset_R_L_I).transpose() * 57.3
-                << endl;
-    fout_result << "Translation LiDAR to IMU (meter)   = " << state.offset_T_L_I.transpose() << endl;
-    fout_result << "Time Lag IMU to LiDAR (second)     = " << time_lag_IMU_wtr_lidar + timediff_imu_wrt_lidar << endl;
-    fout_result << "Bias of Gyroscope  (rad/s)         = " << state.bias_g.transpose() << endl;
-    fout_result << "Bias of Accelerometer (meters/s^2) = " << state.bias_a.transpose() << endl;
-    fout_result << "Gravity in World Frame(meters/s^2) = " << state.gravity.transpose() << endl << endl;
-
-    MD(4, 4) Transform;
-    Transform.setIdentity();
-    Transform.block<3, 3>(0, 0) = state.offset_R_L_I;
-    Transform.block<3, 1>(0, 3) = state.offset_T_L_I;
-    fout_result << "Homogeneous Transformation Matrix from LiDAR to IMU: " << endl;
-    fout_result << Transform << endl << endl << endl;
-}
 
 void print_refine_result() {
     cout.setf(ios::fixed);
@@ -1303,13 +1288,12 @@ int main(int argc, char **argv)
     boost::filesystem::create_directories(root_dir + "/result");
     ofstream Li_D_init_fastlio;
     Li_D_init_fastlio.open(DEBUG_FILE_DIR("Li_D_init_fastlio.txt"), ios::out);
-    fout_result.open(RESULT_FILE_DIR("Initialization_result.txt"), ios::out);
 
-    f.open(root_dir + "/Log/i2lo_log.txt", std::ios::out);
-    f.precision(9);
-    f.setf(std::ios::fixed);
+    time_result.open(root_dir + "/Log/i2lo_log.txt", std::ios::out);
+    time_result.precision(9);
+    time_result.setf(std::ios::fixed);
 
-    if (Li_D_init_fastlio)
+    if (Li_D_init_fastlio && time_result)
         cout << "~~~~" << ROOT_DIR << " file opened" << endl;
     else
         cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;
@@ -1340,6 +1324,8 @@ int main(int argc, char **argv)
             ("/path", 100000);
     int Iteration_NUM;
     double Iteration;
+    double d_init_solve_time = 0;
+    double sum_d_init_solve_time = 0;
     nh.getParam("/Iteration_NUM", Iteration_NUM);
     nh.getParam("/Data_accum_length", dynamic_init->data_accum_length);
     nh.getParam("/Iteration", Iteration);
@@ -1520,6 +1506,7 @@ int main(int argc, char **argv)
 
             double knn_time = 0;
             double solve_time = 0;
+
             int knn_count = 0;
             int iter_count = 0;
             StatesGroup last_converge_state = state;
@@ -1814,7 +1801,7 @@ int main(int argc, char **argv)
             last_odom = state.pos_end;
             last_rot = state.rot_end;
             publish_effect_world(pubLaserCloudEffect);
-            if (path_en && dynamic_init->dynamic_init_fished == true) publish_path(pubPath);
+            if (path_en) publish_path(pubPath, measures_num);
             std::chrono::steady_clock::time_point frame_end = std::chrono::steady_clock::now();
             // if(frame_num < 100 && imu_en){
             //     downSizeMap_fir.setInputCloud(feats_map);
@@ -1829,26 +1816,29 @@ int main(int argc, char **argv)
             //     pcl::io::savePCDFile(filenamequjibian, *(feats_map_down));
             // }
 
-            static int log_id = 0;
-            f << "ID = " << log_id <<
-              " feats points full = " << feats_points_full_size <<
-              " feats points = " << feats_points_size <<
-              " imu_process = " << std::chrono::duration_cast<std::chrono::duration<double> >(t_imu_process_end - t_imu_process_begin).count() * 1000 << " ms" <<
-              " down filter = " << std::chrono::duration_cast<std::chrono::duration<double> >(t_downfilter_end - t_downfilter_begin).count() * 1000 << " ms" <<
-              " icp = "         << std::chrono::duration_cast<std::chrono::duration<double> >(icp_end - icp_begin).count() * 1000 << " ms" <<
-              " knn count = " << knn_count << " knn total cost = " << knn_time * 1000 << " ms" << " solve = " << solve_time * 1000 << " ms" <<
-              " map_increment = " << std::chrono::duration_cast<std::chrono::duration<double> >(map_increment_end - map_increment_begin).count() * 1000 << " ms" <<
-              " total iter = " << iter_count <<
-              " total distort iter = " << distort_time <<
-            log_id++;
+            if (dynamic_init->dynamic_init_fished == false)
+            {
+                time_result << "ID = " << measures_num <<
+                    " imu_process = " << std::chrono::duration_cast<std::chrono::duration<double> >(t_imu_process_end - t_imu_process_begin).count() * 1000 << " ms" <<
+                    " down filter = " << std::chrono::duration_cast<std::chrono::duration<double> >(t_downfilter_end - t_downfilter_begin).count() * 1000 << " ms" <<
+                    " icp = "         << std::chrono::duration_cast<std::chrono::duration<double> >(icp_end - icp_begin).count() * 1000 << " ms" <<
+                    " knn total cost = " << knn_time * 1000 << " ms" << " solve = " << solve_time * 1000 << " ms" <<
+                    " map_increment = " << std::chrono::duration_cast<std::chrono::duration<double> >(map_increment_end - map_increment_begin).count() * 1000 << " ms" <<
+                    " odometry time = " << iter_count << std::chrono::duration_cast<std::chrono::duration<double> >(t_imu_process_end - t_imu_process_begin).count() * 1000
+                            + std::chrono::duration_cast<std::chrono::duration<double> >(t_downfilter_end - t_downfilter_begin).count() * 1000 
+                            + std::chrono::duration_cast<std::chrono::duration<double> >(icp_end - icp_begin).count() * 1000
+                            + knn_time * 1000 + solve_time * 1000
+                            + std::chrono::duration_cast<std::chrono::duration<double> >(map_increment_end - map_increment_begin).count() * 1000 << " ms" <<
+                    " d_init_solve_time = " << d_init_solve_time << " ms" <<
+                    " sum_d_init_solve_time = " << sum_d_init_solve_time << " ms" <<endl;
+            }
 
             frame_num++;
-            if (dynamic_init->dynamic_init_fished == true) 
-            {
-                Li_D_init_fastlio << lidar_end_time << " " <<state.vel_end.transpose() << " "  \
-                    << " " << state.bias_g.transpose() << " " \ 
-                    << state.gravity.transpose() << " " << endl;        
-            }
+            Li_D_init_fastlio <<  std::fixed << std::setprecision(9) 
+            <<lidar_end_time << " " 
+            <<state.vel_end.transpose() << " " 
+            << state.bias_g.transpose() << " " 
+            << state.gravity.transpose() << " " << endl;        
             if(!dynamic_init->dynamic_init_fished){
                 if(!Iteration_begin){
                     dynamic_init->Data_processing_lo(state.rot_end, state.pos_end, Measures.lidar_end_time, p_imu->tmp_pre_integration);
@@ -1861,9 +1851,13 @@ int main(int argc, char **argv)
             }
             if(!LGO_MODE && measures_num == dynamic_init->data_accum_length - 1 && !dynamic_init->dynamic_init_fished){
                 if(!dynamic_init->dynamic_init_fished){
+                    std::chrono::steady_clock::time_point t_solve_begin = std::chrono::steady_clock::now();
                     dynamic_init->solve_Rot_bias_gyro();
                     VectorXd x_;
                     dynamic_init->LinearAlignment_withoutba(state, x_);
+                    std::chrono::steady_clock::time_point t_solve_end = std::chrono::steady_clock::now();
+                    d_init_solve_time = std::chrono::duration_cast<std::chrono::duration<double> >(t_solve_end - t_solve_begin).count();
+                    sum_d_init_solve_time += std::chrono::duration_cast<std::chrono::duration<double> >(t_solve_end - t_solve_begin).count();
                     current_g = dynamic_init->get_g();
                     if(!Iteration_begin){
                         Iteration_begin = true;
@@ -1906,9 +1900,6 @@ int main(int argc, char **argv)
                 if(abs(Last_g-current_g) < Iteration || iteration_num == Iteration_NUM)
                 {
                     dynamic_init->dynamic_init_fished = true;
-                    Li_D_init_fastlio << lidar_end_time << " " <<state.vel_end.transpose() << " "  \
-                    << " " << state.bias_g.transpose() << " " \ 
-                    << state.gravity.transpose() << " " << endl;
                 }else{
                     iteration_num ++;
                     Last_g = dynamic_init->get_g();

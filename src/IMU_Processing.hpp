@@ -634,7 +634,7 @@ void ImuProcess::Process(const MeasureGroup &meas, StatesGroup &state, PointClou
             }
         }else{
             cout << endl;
-            printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, online refinement begins.\n\n" RESET);
+            printf(BOLDMAGENTA "[Refinement] Switch to LIO mode, iteration begins.\n\n" RESET);
             last_imu_   = meas.imu.back();
             imu_need_init_ = false;
             cov_acc = cov_acc_scale;
