@@ -1289,7 +1289,7 @@ int main(int argc, char **argv)
     ofstream Li_D_init_fastlio;
     Li_D_init_fastlio.open(DEBUG_FILE_DIR("Li_D_init_fastlio.txt"), ios::out);
 
-    time_result.open(root_dir + "/Log/i2lo_log.txt", std::ios::out);
+    time_result.open(root_dir + "/Log/time_log.txt", std::ios::out);
     time_result.precision(9);
     time_result.setf(std::ios::fixed);
 
