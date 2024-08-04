@@ -1824,7 +1824,7 @@ int main(int argc, char **argv)
                     " icp = "         << std::chrono::duration_cast<std::chrono::duration<double> >(icp_end - icp_begin).count() * 1000 << " ms" <<
                     " knn total cost = " << knn_time * 1000 << " ms" << " solve = " << solve_time * 1000 << " ms" <<
                     " map_increment = " << std::chrono::duration_cast<std::chrono::duration<double> >(map_increment_end - map_increment_begin).count() * 1000 << " ms" <<
-                    " odometry time = " << iter_count << std::chrono::duration_cast<std::chrono::duration<double> >(t_imu_process_end - t_imu_process_begin).count() * 1000
+                    " odometry time = " << std::chrono::duration_cast<std::chrono::duration<double> >(t_imu_process_end - t_imu_process_begin).count() * 1000
                             + std::chrono::duration_cast<std::chrono::duration<double> >(t_downfilter_end - t_downfilter_begin).count() * 1000 
                             + std::chrono::duration_cast<std::chrono::duration<double> >(icp_end - icp_begin).count() * 1000
                             + knn_time * 1000 + solve_time * 1000
