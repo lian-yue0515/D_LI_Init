@@ -9,8 +9,8 @@ preprocess:
     point_filter_num: 2
 
 initialization:
-    cut_frame: false
-    cut_frame_num: 5           # must be positive integer
+    cut_frame: true
+    cut_frame_num: 3           # must be positive integer
     cut_frame_init_num: 5       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805

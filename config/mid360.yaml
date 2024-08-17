@@ -20,8 +20,8 @@ initialization:
     Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
 
 mapping:
-    filter_size_surf: 0.05
-    filter_size_map: 0.15
+    filter_size_surf: 0.5
+    filter_size_map: 0.5
     gyr_cov: 0.0001             # lgo角速度噪声协方差
     acc_cov: 1             # lgo线速度噪声协方差
     # gyr_cov: 0.01             # lo角速度噪声协方差

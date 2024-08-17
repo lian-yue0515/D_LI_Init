@@ -5,10 +5,10 @@
 
     <rosparam command="load" file="$(find lidar_imu_init)/config/velodyne.yaml" />
 
-    <param name="Iteration_NUM" type="int" value="20" />
+    <param name="Iteration_NUM" type="int" value="10" />
     <param name="Data_accum_length" type="int" value="20" />
     <param name="Iteration" type="double" value="0.01" />
-    <param name="LGO_MODE" type="bool" value="1" />
+    <param name="LGO_MODE" type="bool" value="0" />
     <param name="LO_MODE" type="bool" value="0" />
     <param name="LIO_MODE" type="bool" value="0" />
     <node pkg="lidar_imu_init" type="lidar_imu_init" name="laserMapping" output="screen" />
