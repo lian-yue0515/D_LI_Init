@@ -10,10 +10,10 @@
 	<param name="LGO_MODE" type="bool" value="0" />
 	<param name="LO_MODE" type="bool" value="0" />
 	<param name="LIO_MODE" type="bool" value="0" />
-	<node pkg="lidar_imu_init" type="lidar_imu_init" name="laserMapping" output="screen" />
+	<node pkg="lidar_imu_init" type="lidar_imu_init" name="D_Li_init" output="screen" />
 
 	<group if="$(arg rviz)">
-	<node launch-prefix="nice" pkg="rviz" type="rviz" name="rviz" args="-d $(find lidar_imu_init)/rviz_cfg/fast_lo.rviz" />
+	<node launch-prefix="nice_init" pkg="rviz_init" type="rviz_init" name="rviz_init" args="-d $(find lidar_imu_init)/rviz_cfg/D_Li_init.rviz" />
 	</group>
 
 	launch-prefix="gdb -ex run --args"

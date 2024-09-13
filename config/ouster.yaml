@@ -1,8 +1,8 @@
 common:
-    # lid_topic:  "/os_cloud_node/points"
-    # imu_topic:  "/os_cloud_node/imu"
-    lid_topic:  "/os1_cloud_node1/points"
-    imu_topic:  "/os1_cloud_node1/imu"
+    lid_topic:  "/os_cloud_node/points"
+    imu_topic:  "/os_cloud_node/imu"
+    # lid_topic:  "/os1_cloud_node1/points"
+    # imu_topic:  "/os1_cloud_node1/imu"
 preprocess:
     lidar_type: 3                # Ouster LiDAR
     scan_line: 128
@@ -12,7 +12,7 @@ preprocess:
 
 initialization:
     cut_frame: true
-    cut_frame_num: 2 # must be positive integer
+    cut_frame_num: 3 # must be positive integer
     cut_frame_init_num: 20       # 如果分帧的话 从第几帧开始分帧 默认固态 5 机械 20
     orig_odom_freq: 10
     mean_acc_norm: 9.805
@@ -22,14 +22,14 @@ initialization:
     Trans_LI_cov: [ 0.0001, 0.0001, 0.0001 ]
 
 mapping:
-    filter_size_surf: 0.5
-    filter_size_map: 0.5
+    filter_size_surf: 1
+    filter_size_map: 1
     gyr_cov: 0.0001             # lgo角速度噪声协方差
     acc_cov: 1             # lgo线速度噪声协方差
     # gyr_cov: 0.01             # lo角速度噪声协方差
     # acc_cov: 0.01             # lo线速度噪声协方差
-    # gyr_cov: 0.1             # lio角速度噪声协方差
-    # acc_cov: 0.1             # lio线速度噪声协方差
+    # gyr_cov: 0.01             # lio角速度噪声协方差
+    # acc_cov: 0.01             # lio线速度噪声协方差
     det_range: 150.0
     cov_lidar: 0.001
     max_iteration: 20
@@ -38,15 +38,15 @@ mapping:
     b_acc_cov: 0.0001
     b_gyr_cov: 0.0001
     # MCD:/os_cloud_node/points 
-    # extrinsic_T: [ 0.006, -0.0119, -0.0076 ]
-    # extrinsic_R: [ 1, 0, 0,
-    #                0, 1, 0,
-    #                0, 0, 1]
-    # NTU_VIRAL:/os1_cloud_node1/points 
-    extrinsic_T: [ -0.050, 0, 0.055 ]
+    extrinsic_T: [ 0.006, -0.0119, -0.0076 ]
     extrinsic_R: [ 1, 0, 0,
                    0, 1, 0,
                    0, 0, 1]
+    # NTU_VIRAL:/os1_cloud_node1/points 
+    # extrinsic_T: [ -0.050, 0, 0.055 ]
+    # extrinsic_R: [ 1, 0, 0,
+    #                0, 1, 0,
+    #                0, 0, 1]
     # Newer_collwge:/os_cloud_node/points
     # extrinsic_T: [0.014, -0.012, -0.015] 
     # extrinsic_R: [ 1, 0, 0,

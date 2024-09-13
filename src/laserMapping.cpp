@@ -195,6 +195,11 @@ StatesGroup state;
 StatesGroup last_state;
 
 PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
+PointCloudXYZI::Ptr qujibian_map_save(new PointCloudXYZI());
+PointCloudXYZI::Ptr yuanshi_map_save(new PointCloudXYZI());
+PointCloudXYZI::Ptr xuanzhaun_map_save(new PointCloudXYZI());
+
+
 pcl::PCDWriter pcd_writer;
 string all_points_dir;
 
@@ -1198,7 +1203,7 @@ void adjustCVCov()
 
 int main(int argc, char **argv)
 {
-    ros::init(argc, argv, "laserMapping");
+    ros::init(argc, argv, "D_Li_init");
     ros::NodeHandle nh;
 
     nh.param<int>("mapping/max_iteration", NUM_MAX_ITERATIONS, 10);
@@ -1305,23 +1310,23 @@ int main(int argc, char **argv)
          nh.subscribe(lid_topic, 200000, standard_pcl_cbk);
 
     ros::Publisher pubIMU_sync = nh.advertise<sensor_msgs::Imu>
-            ("/livox/imu/async", 100000);
+            ("/livox/imu/async_lidar_init", 100000);
     ros::Subscriber sub_imu = nh.subscribe<sensor_msgs::Imu>
             (imu_topic, 200000, boost::bind(&imu_cbk, _1, pubIMU_sync));
 
 
     ros::Publisher pubLaserCloudFullRes = nh.advertise<sensor_msgs::PointCloud2>
-            ("/cloud_registered", 100000);
+            ("/lidar_init_cloud_registered", 100000);
     ros::Publisher pubLaserCloudFullRes_body = nh.advertise<sensor_msgs::PointCloud2>
-            ("/cloud_registered_body", 100000);
+            ("/lidar_init_cloud_registered_body", 100000);
     ros::Publisher pubLaserCloudEffect = nh.advertise<sensor_msgs::PointCloud2>
-            ("/cloud_effected", 100000);
+            ("/lidar_init_cloud_effected", 100000);
     ros::Publisher pubLaserCloudMap = nh.advertise<sensor_msgs::PointCloud2>
-            ("/Laser_map", 100000);
+            ("/lidar_init_Laser_map", 100000);
     ros::Publisher pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>
-            ("/aft_mapped_to_init", 100000);
+            ("/lidar_init_aft_mapped_to_init", 100000);
     ros::Publisher pubPath = nh.advertise<nav_msgs::Path>
-            ("/path", 100000);
+            ("/lidar_init_path", 100000);
     int Iteration_NUM;
     double Iteration;
     double d_init_solve_time = 0;
@@ -1777,6 +1782,38 @@ int main(int argc, char **argv)
                 //     cloudshow->width = feats_down_body->size();
                 //     std::string filenamequjibian_fin = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/qujibianfin"+ std::to_string(frame_id)+ ".pcd";
                 //     pcl::io::savePCDFile(filenamequjibian_fin, *(cloudshow));
+                //     if (1) {
+                //         int size = feats_down_body->points.size();
+                //         PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
+                //         for (int i = 0; i < size; i++) {
+                //         pointBodyToWorld(&feats_down_body->points[i], &laserCloudWorld->points[i]);
+                //         }
+                //         *qujibian_map_save += *laserCloudWorld;
+                //     }
+                //     if (1) {
+                //         int size = feats_undistort->points.size();
+                //         PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
+                //         for (int i = 0; i < size; i++) {
+                //         pointBodyToWorld(&feats_undistort->points[i], &laserCloudWorld->points[i]);
+                //         }
+                //         *xuanzhaun_map_save += *laserCloudWorld;
+                //     }
+                //     if (1) {
+                //         int size = Measures.lidar->points.size();
+                //         PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
+                //         for (int i = 0; i < size; i++) {
+                //         pointBodyToWorld(&Measures.lidar->points[i], &laserCloudWorld->points[i]);
+                //         }
+                //         *yuanshi_map_save += *laserCloudWorld;
+                //     }
+                //     if(frame_id == dynamic_init->data_accum_length - 1){
+                //         std::string filenamequjibian_map = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibianfin/map"+ std::to_string(0000000)+ ".pcd";
+                //         std::string filenameyuanshi_map = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/yuanshi/yuanshi_map"+ std::to_string(0000000)+ ".pcd";
+                //         std::string filenamequxuanzhuan_map = "/home/myx/fighting/LGO_WS/src/LiDAR_DYNAMIC_INIT/pcb/qujibian/xuanzhuan_map"+ std::to_string(0000000)+ ".pcd";
+                //         pcl::io::savePCDFile(filenamequjibian_map, *(qujibian_map_save));
+                //         pcl::io::savePCDFile(filenamequxuanzhuan_map, *(xuanzhaun_map_save));
+                //         pcl::io::savePCDFile(filenameyuanshi_map, *(yuanshi_map_save));
+                //     }
                 // }
             }
             /******* Publish odometry *******/
