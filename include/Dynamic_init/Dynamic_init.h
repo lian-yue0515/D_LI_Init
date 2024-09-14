@@ -23,8 +23,6 @@
 #include <pcl/common/transforms.h>
 #include "../integration_base.hpp"
 #include <pcl/filters/voxel_grid.h>
-#include <teaser/matcher.h>
-#include <teaser/registration.h>
 #include <pcl/features/normal_3d_omp.h>
 #include <pcl/features/fpfh_omp.h>
 #include <pcl_conversions/pcl_conversions.h>
